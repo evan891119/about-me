@@ -72,8 +72,22 @@ function init() {
   dirLight.position.set(-3, 10, -10);
   scene.add(dirLight);
 
+  // Floor with simple checker texture
   const floorGeo = new THREE.PlaneGeometry(200, 200);
-  const floorMat = new THREE.MeshStandardMaterial({ color: 0x888888 });
+  // create a small canvas for checker pattern
+  const size = 32;
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  // draw checker: two colors
+  ctx.fillStyle = '#888888'; ctx.fillRect(0, 0, size, size);
+  ctx.fillStyle = '#777777'; ctx.fillRect(0, 0, size/2, size/2);
+  ctx.fillRect(size/2, size/2, size/2, size/2);
+  const floorTexture = new THREE.CanvasTexture(canvas);
+  floorTexture.wrapS = floorTexture.wrapT = THREE.RepeatWrapping;
+  floorTexture.repeat.set(20, 20);
+  const floorMat = new THREE.MeshStandardMaterial({ map: floorTexture });
   const floor = new THREE.Mesh(floorGeo, floorMat);
   floor.rotation.x = -Math.PI / 2;
   scene.add(floor);
@@ -238,7 +252,7 @@ function animate() {
   prevTime = time;
   // Determine if player is grounded (approximate by vertical velocity)
   const isGrounded = Math.abs(playerBody.velocity.y) < 0.05;
-  const speedGround = 10;
+  const speedGround = 15;
   const speedAir = speedGround * 0.3; // reduce air movement to simulate friction effect
   const speed = isGrounded ? speedGround : speedAir;
   // Compute horizontal movement direction based on camera orientation
