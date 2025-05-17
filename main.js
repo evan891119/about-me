@@ -7,6 +7,7 @@ import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.152.2/examples/
 // Import WebGL detection helper
 // WebGL detection helper (default export)
 import WebGL from 'https://cdn.jsdelivr.net/npm/three@0.152.2/examples/jsm/capabilities/WebGL.js';
+import { buildWorld } from './worldBuilder.js';
 
 // Core components
 let camera, scene, renderer, controls;
@@ -102,77 +103,10 @@ function init() {
 
   // Initialize lighting based on current time
   updateLighting();
-  // Floor with simple checker texture
-  const floorGeo = new THREE.PlaneGeometry(200, 200);
-  // create a small canvas for checker pattern
-  const size = 32;
-  const canvas = document.createElement('canvas');
-  canvas.width = size;
-  canvas.height = size;
-  const ctx = canvas.getContext('2d');
-  // draw checker: two colors
-  ctx.fillStyle = '#888888'; ctx.fillRect(0, 0, size, size);
-  ctx.fillStyle = '#777777'; ctx.fillRect(0, 0, size/2, size/2);
-  ctx.fillRect(size/2, size/2, size/2, size/2);
-  const floorTexture = new THREE.CanvasTexture(canvas);
-  floorTexture.wrapS = floorTexture.wrapT = THREE.RepeatWrapping;
-  floorTexture.repeat.set(20, 20);
-  const floorMat = new THREE.MeshStandardMaterial({ map: floorTexture });
-  const floor = new THREE.Mesh(floorGeo, floorMat);
-  floor.rotation.x = -Math.PI / 2;
-  scene.add(floor);
-
-  // Example collidable objects: three colored cubes
-  const boxGeo = new THREE.BoxGeometry(1, 1, 1);
-  ['red', 'green', 'blue'].forEach((color, i) => {
-    const mat = new THREE.MeshStandardMaterial({ color });
-    const mesh = new THREE.Mesh(boxGeo, mat);
-    mesh.position.set(i * 2 - 2, 0.5, -5);
-    scene.add(mesh);
-    // register for collision
-    collidableMeshes.push(mesh);
-    // precompute bounding box in world space
-    const box = new THREE.Box3().setFromObject(mesh);
-    collidableBoxes.push(box);
-  });
-
-  // Initialize physics world
-  world = new CANNON.World();
-  world.gravity.set(0, -30, 0);
-  // Initialize default material for friction
-  const defaultMat = new CANNON.Material('default');
-  const defaultContact = new CANNON.ContactMaterial(
-    defaultMat,
-    defaultMat,
-    { friction: 0.4, restitution: 0.0 }
-  );
-  world.addContactMaterial(defaultContact);
-  world.defaultContactMaterial = defaultContact;
-
-  // Player physics body
-  const playerShape = new CANNON.Sphere(playerBoundingRadius);
-  playerBody = new CANNON.Body({ mass: 1, material: defaultMat });
-  playerBody.addShape(playerShape);
-  playerBody.position.set(0, cameraHeight, 5);
-  playerBody.fixedRotation = true;
-  playerBody.updateMassProperties();
-  world.addBody(playerBody);
-
-  // Ground plane
-  const groundBody = new CANNON.Body({ mass: 0, material: defaultMat });
-  groundBody.addShape(new CANNON.Plane());
-  groundBody.quaternion.setFromEuler(-Math.PI / 2, 0, 0);
-  world.addBody(groundBody);
-
-  // Static boxes from scene
-  collidableMeshes.forEach(mesh => {
-    const { width, height, depth } = mesh.geometry.parameters;
-    const boxShape = new CANNON.Box(new CANNON.Vec3(width / 2, height / 2, depth / 2));
-    const boxBody = new CANNON.Body({ mass: 0, material: defaultMat });
-    boxBody.addShape(boxShape);
-    boxBody.position.copy(mesh.position);
-    world.addBody(boxBody);
-  });
+  // Build world geometry and physics bodies
+  const worldData = buildWorld({ scene, collidableMeshes, collidableBoxes, cameraHeight, playerBoundingRadius });
+  world = worldData.world;
+  playerBody = worldData.playerBody;
 
   renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setSize(window.innerWidth, window.innerHeight);
