@@ -10,6 +10,34 @@ import WebGL from 'https://cdn.jsdelivr.net/npm/three@0.152.2/examples/jsm/capab
 
 // Core components
 let camera, scene, renderer, controls;
+// Light components and colors for day/night cycle
+let hemiLight, dirLight;
+const daySkyColor = new THREE.Color(0x87CEEB);
+const nightSkyColor = new THREE.Color(0x050D2B);
+const dayLightColor = new THREE.Color(0xFFFFFF);
+const nightLightColor = new THREE.Color(0x666699);
+const dayGroundColor = new THREE.Color(0x444444);
+const nightGroundColor = new THREE.Color(0x111111);
+/**
+ * Updates lighting and sky background based on current system time.
+ */
+function updateLighting() {
+  if (!dirLight || !hemiLight || !scene) return;
+  const now = new Date();
+  const hours = now.getHours() + now.getMinutes() / 60;
+  const angle = (hours / 24) * Math.PI * 2 - Math.PI / 2;
+  const sunX = Math.cos(angle) * 100;
+  const sunY = Math.sin(angle) * 100;
+  dirLight.position.set(sunX, sunY, -30);
+  const sunIntensity = Math.max(Math.sin(angle), 0);
+  dirLight.intensity = sunIntensity;
+  dirLight.color.lerpColors(nightLightColor, dayLightColor, sunIntensity);
+  const hemiIntensity = sunIntensity * 0.5 + 0.2;
+  hemiLight.intensity = hemiIntensity;
+  hemiLight.color.lerpColors(nightSkyColor, daySkyColor, sunIntensity);
+  hemiLight.groundColor.lerpColors(nightGroundColor, dayGroundColor, sunIntensity);
+  scene.background.lerpColors(nightSkyColor, daySkyColor, sunIntensity);
+}
 // Coordinate display element
 let coordsDiv;
 // Movement state
@@ -64,14 +92,16 @@ function init() {
   );
   camera.position.set(0, 1.6, 5);
 
-  const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444);
+  hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444);
   hemiLight.position.set(0, 20, 0);
   scene.add(hemiLight);
 
-  const dirLight = new THREE.DirectionalLight(0xffffff);
+  dirLight = new THREE.DirectionalLight(0xffffff);
   dirLight.position.set(-3, 10, -10);
   scene.add(dirLight);
 
+  // Initialize lighting based on current time
+  updateLighting();
   // Floor with simple checker texture
   const floorGeo = new THREE.PlaneGeometry(200, 200);
   // create a small canvas for checker pattern
@@ -286,6 +316,8 @@ function animate() {
     const p = playerBody.position;
     coordsDiv.innerText = `x:${p.x.toFixed(2)} y:${p.y.toFixed(2)} z:${p.z.toFixed(2)}`;
   }
+  // Update lighting for day/night cycle
+  updateLighting();
   renderer.render(scene, camera);
   return;
 }
