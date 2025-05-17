@@ -1,6 +1,7 @@
 // Import THREE from import map
 // Import core Three.js from import map
 import * as THREE from 'three';
+import * as CANNON from 'cannon-es';
 import { PointerLockControls } from 'https://cdn.jsdelivr.net/npm/three@0.152.2/examples/jsm/controls/PointerLockControls.js';
 import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.152.2/examples/jsm/loaders/GLTFLoader.js';
 // Import WebGL detection helper
@@ -19,6 +20,10 @@ let velocity = new THREE.Vector3();
 // Collision detection: collidable meshes and boxes
 const collidableMeshes = [];
 const collidableBoxes = [];
+// Physics world and player body
+let world, playerBody;
+// Jump request flag
+let jumpRequested = false;
 // Player collision sphere parameters
 const playerBoundingRadius = 0.3;
 const playerHeight = 1.0; // y coordinate to test collisions (approx player waist)
@@ -85,6 +90,35 @@ function init() {
     collidableBoxes.push(box);
   });
 
+  // Initialize physics world
+  world = new CANNON.World();
+  world.gravity.set(0, -30, 0);
+
+  // Player physics body
+  const playerShape = new CANNON.Sphere(playerBoundingRadius);
+  playerBody = new CANNON.Body({ mass: 1 });
+  playerBody.addShape(playerShape);
+  playerBody.position.set(0, cameraHeight, 5);
+  playerBody.fixedRotation = true;
+  playerBody.updateMassProperties();
+  world.addBody(playerBody);
+
+  // Ground plane
+  const groundBody = new CANNON.Body({ mass: 0 });
+  groundBody.addShape(new CANNON.Plane());
+  groundBody.quaternion.setFromEuler(-Math.PI / 2, 0, 0);
+  world.addBody(groundBody);
+
+  // Static boxes from scene
+  collidableMeshes.forEach(mesh => {
+    const { width, height, depth } = mesh.geometry.parameters;
+    const boxShape = new CANNON.Box(new CANNON.Vec3(width / 2, height / 2, depth / 2));
+    const boxBody = new CANNON.Body({ mass: 0 });
+    boxBody.addShape(boxShape);
+    boxBody.position.copy(mesh.position);
+    world.addBody(boxBody);
+  });
+
   renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setSize(window.innerWidth, window.innerHeight);
   document.body.appendChild(renderer.domElement);
@@ -136,11 +170,7 @@ function init() {
         moveRight = true;
         break;
       case 'Space':
-        // Jump when on ground
-        if (canJump === true) {
-          velocityY = JUMP_SPEED;
-          canJump = false;
-        }
+        jumpRequested = true;
         break;
     }
   };
@@ -179,113 +209,36 @@ function onWindowResize() {
 
 function animate() {
   requestAnimationFrame(animate);
-
+  // Physics-driven movement
   const time = performance.now();
   const delta = (time - prevTime) / 1000;
-
-  velocity.x -= velocity.x * 10.0 * delta;
-  velocity.z -= velocity.z * 10.0 * delta;
-  const speed = 25.0;
-
-  if (moveForward) velocity.z -= speed * delta;
-  if (moveBackward) velocity.z += speed * delta;
-  if (moveLeft) velocity.x += speed * delta;
-  if (moveRight) velocity.x -= speed * delta;
-
-  // Collision-aware movement: separate axis handling
-  const deltaX = -velocity.x * delta;
-  const deltaZ = -velocity.z * delta;
-  // compute player foot Y for collision height check
-  const footY = controls.getObject().position.y - cameraHeight;
-  // Move along local X (left/right)
-  if (deltaX !== 0) {
-    // direction vector for X
-    const dirX = new THREE.Vector3(1, 0, 0);
-    if (deltaX < 0) dirX.negate();
-    // rotate by yaw only (ignore pitch)
-    dirX.applyQuaternion(controls.getObject().quaternion).normalize();
-    // compute next horizontal position
-    const nextPosX = controls.getObject().position.clone().add(dirX.clone().multiplyScalar(Math.abs(deltaX)));
-    // collision sphere at player height
-    const sphereX = new THREE.Sphere(new THREE.Vector3(nextPosX.x, playerHeight, nextPosX.z), playerBoundingRadius);
-    // test against collidable boxes
-    let blockedX = false;
-    for (let i = 0; i < collidableBoxes.length; i++) {
-      const box = collidableBoxes[i];
-      // only block collision when foot is below top of box
-      if (footY < box.max.y && box.intersectsSphere(sphereX)) {
-        blockedX = true;
-        break;
-      }
-    }
-    if (!blockedX) {
-      controls.moveRight(deltaX);
-    } else {
-      velocity.x = 0;
-    }
-  }
-  // Apply gravity and jumping with vertical collisions
-  velocityY -= GRAVITY * delta;
-  // previous and next Y positions
-  const prevY = controls.getObject().position.y;
-  let newY = prevY + velocityY * delta;
-  let landed = false;
-  // check landing on boxes when falling
-  if (velocityY <= 0) {
-    const footY = prevY - cameraHeight;
-    const nextFootY = newY - cameraHeight;
-    for (let i = 0; i < collidableBoxes.length; i++) {
-      const box = collidableBoxes[i];
-      // horizontal overlap (x,z) within box bounds + radius
-      const px = controls.getObject().position.x;
-      const pz = controls.getObject().position.z;
-      if (px > box.min.x - playerBoundingRadius && px < box.max.x + playerBoundingRadius &&
-          pz > box.min.z - playerBoundingRadius && pz < box.max.z + playerBoundingRadius) {
-        // crossing box top surface
-        if (footY >= box.max.y && nextFootY <= box.max.y) {
-          newY = box.max.y + cameraHeight;
-          velocityY = 0;
-          landed = true;
-          canJump = true;
-          break;
-        }
-      }
-    }
-  }
-  if (!landed) {
-    // ground check
-    if (newY < cameraHeight) {
-      newY = cameraHeight;
-      velocityY = 0;
-      canJump = true;
-    }
-  }
-  controls.getObject().position.y = newY;
-  // Move along local Z (forward/backward)
-  if (deltaZ !== 0) {
-    // direction vector for Z
-    const dirZ = new THREE.Vector3(0, 0, -1);
-    if (deltaZ < 0) dirZ.negate();
-    // rotate by yaw only
-    dirZ.applyQuaternion(controls.getObject().quaternion).normalize();
-    const nextPosZ = controls.getObject().position.clone().add(dirZ.clone().multiplyScalar(Math.abs(deltaZ)));
-    const sphereZ = new THREE.Sphere(new THREE.Vector3(nextPosZ.x, playerHeight, nextPosZ.z), playerBoundingRadius);
-    let blockedZ = false;
-    for (let i = 0; i < collidableBoxes.length; i++) {
-      const box = collidableBoxes[i];
-      // only block collision when foot is below top of box
-      if (footY < box.max.y && box.intersectsSphere(sphereZ)) {
-        blockedZ = true;
-        break;
-      }
-    }
-    if (!blockedZ) {
-      controls.moveForward(deltaZ);
-    } else {
-      velocity.z = 0;
-    }
-  }
-
   prevTime = time;
+  const speed = 10;
+  // Compute horizontal movement direction based on camera orientation
+  const forward = new THREE.Vector3();
+  camera.getWorldDirection(forward);
+  forward.y = 0;
+  forward.normalize();
+  const right = new THREE.Vector3();
+  right.crossVectors(forward, new THREE.Vector3(0, 1, 0)).normalize();
+  const moveDir = new THREE.Vector3();
+  if (moveForward) moveDir.add(forward);
+  if (moveBackward) moveDir.sub(forward);
+  if (moveRight) moveDir.add(right);
+  if (moveLeft) moveDir.sub(right);
+  // Apply horizontal input
+  if (moveDir.length() > 0) {
+    moveDir.normalize().multiplyScalar(speed);
+    playerBody.velocity.x = moveDir.x;
+    playerBody.velocity.z = moveDir.z;
+  }
+  if (jumpRequested && Math.abs(playerBody.velocity.y) < 0.05) {
+    playerBody.velocity.y = JUMP_SPEED;
+    jumpRequested = false;
+  }
+  // Step the physics world with fixed timestep for stability
+  world.step(1/60, delta, 3);
+  controls.getObject().position.copy(playerBody.position);
   renderer.render(scene, camera);
+  return;
 }
