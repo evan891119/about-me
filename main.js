@@ -10,6 +10,8 @@ import WebGL from 'https://cdn.jsdelivr.net/npm/three@0.152.2/examples/jsm/capab
 
 // Core components
 let camera, scene, renderer, controls;
+// Coordinate display element
+let coordsDiv;
 // Movement state
 let moveForward = false;
 let moveBackward = false;
@@ -93,10 +95,19 @@ function init() {
   // Initialize physics world
   world = new CANNON.World();
   world.gravity.set(0, -30, 0);
+  // Initialize default material for friction
+  const defaultMat = new CANNON.Material('default');
+  const defaultContact = new CANNON.ContactMaterial(
+    defaultMat,
+    defaultMat,
+    { friction: 0.4, restitution: 0.0 }
+  );
+  world.addContactMaterial(defaultContact);
+  world.defaultContactMaterial = defaultContact;
 
   // Player physics body
   const playerShape = new CANNON.Sphere(playerBoundingRadius);
-  playerBody = new CANNON.Body({ mass: 1 });
+  playerBody = new CANNON.Body({ mass: 1, material: defaultMat });
   playerBody.addShape(playerShape);
   playerBody.position.set(0, cameraHeight, 5);
   playerBody.fixedRotation = true;
@@ -104,7 +115,7 @@ function init() {
   world.addBody(playerBody);
 
   // Ground plane
-  const groundBody = new CANNON.Body({ mass: 0 });
+  const groundBody = new CANNON.Body({ mass: 0, material: defaultMat });
   groundBody.addShape(new CANNON.Plane());
   groundBody.quaternion.setFromEuler(-Math.PI / 2, 0, 0);
   world.addBody(groundBody);
@@ -113,7 +124,7 @@ function init() {
   collidableMeshes.forEach(mesh => {
     const { width, height, depth } = mesh.geometry.parameters;
     const boxShape = new CANNON.Box(new CANNON.Vec3(width / 2, height / 2, depth / 2));
-    const boxBody = new CANNON.Body({ mass: 0 });
+    const boxBody = new CANNON.Body({ mass: 0, material: defaultMat });
     boxBody.addShape(boxShape);
     boxBody.position.copy(mesh.position);
     world.addBody(boxBody);
@@ -122,6 +133,18 @@ function init() {
   renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setSize(window.innerWidth, window.innerHeight);
   document.body.appendChild(renderer.domElement);
+  // Create coordinate display in top-right
+  coordsDiv = document.createElement('div');
+  coordsDiv.style.position = 'absolute';
+  coordsDiv.style.top = '10px';
+  coordsDiv.style.right = '10px';
+  coordsDiv.style.color = '#fff';
+  coordsDiv.style.fontFamily = 'monospace';
+  coordsDiv.style.background = 'rgba(0,0,0,0.5)';
+  coordsDiv.style.padding = '4px 8px';
+  coordsDiv.style.borderRadius = '4px';
+  coordsDiv.style.zIndex = '100';
+  document.body.appendChild(coordsDiv);
 
   // PointerLockControls: lock pointer on the document body
   controls = new PointerLockControls(camera, document.body);
@@ -213,7 +236,11 @@ function animate() {
   const time = performance.now();
   const delta = (time - prevTime) / 1000;
   prevTime = time;
-  const speed = 10;
+  // Determine if player is grounded (approximate by vertical velocity)
+  const isGrounded = Math.abs(playerBody.velocity.y) < 0.05;
+  const speedGround = 10;
+  const speedAir = speedGround * 0.3; // reduce air movement to simulate friction effect
+  const speed = isGrounded ? speedGround : speedAir;
   // Compute horizontal movement direction based on camera orientation
   const forward = new THREE.Vector3();
   camera.getWorldDirection(forward);
@@ -238,7 +265,13 @@ function animate() {
   }
   // Step the physics world with fixed timestep for stability
   world.step(1/60, delta, 3);
+  // Sync camera to physics body
   controls.getObject().position.copy(playerBody.position);
+  // Update coordinate display
+  if (coordsDiv) {
+    const p = playerBody.position;
+    coordsDiv.innerText = `x:${p.x.toFixed(2)} y:${p.y.toFixed(2)} z:${p.z.toFixed(2)}`;
+  }
   renderer.render(scene, camera);
   return;
 }
