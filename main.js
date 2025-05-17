@@ -7,7 +7,7 @@ import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.152.2/examples/
 // Import WebGL detection helper
 // WebGL detection helper (default export)
 import WebGL from 'https://cdn.jsdelivr.net/npm/three@0.152.2/examples/jsm/capabilities/WebGL.js';
-import { buildWorld } from './worldBuilder.js';
+import { buildWorld, createHouse } from './worldBuilder.js';
 
 // Core components
 let camera, scene, renderer, controls;
@@ -107,6 +107,8 @@ function init() {
   const worldData = buildWorld({ scene, collidableMeshes, collidableBoxes, cameraHeight, playerBoundingRadius });
   world = worldData.world;
   playerBody = worldData.playerBody;
+  // Create a sample house at origin
+  createHouse({ scene, collidableMeshes, collidableBoxes, world }, { position: new THREE.Vector3(0, 0, -10) });
 
   renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setSize(window.innerWidth, window.innerHeight);
@@ -221,7 +223,27 @@ function onMouseDown(event) {
   // Check intersections against interactable meshes
   const intersects = raycaster.intersectObjects(collidableMeshes, true);
   if (intersects.length > 0) {
-    console.log('Clicked object:', intersects[0].object);
+    const obj = intersects[0].object;
+    // Handle door interaction
+    if (obj.userData.isDoor && obj.userData.doorPivot) {
+      const pivot = obj.userData.doorPivot;
+      const doorBody = obj.userData.doorBody;
+      const open = !pivot.userData.isOpen;
+      // Rotate door mesh
+      pivot.rotation.y = open ? pivot.userData.openRotation : pivot.userData.closedRotation;
+      pivot.userData.isOpen = open;
+      // Toggle physics collision
+      if (doorBody) {
+        if (open) {
+          world.removeBody(doorBody);
+        } else {
+          world.addBody(doorBody);
+        }
+      }
+      console.log(open ? 'Door opened' : 'Door closed');
+    } else {
+      console.log('Clicked object:', obj);
+    }
   } else {
     console.log('Clicked nothing');
   }
