@@ -38,6 +38,10 @@ function updateLighting() {
   hemiLight.color.lerpColors(nightSkyColor, daySkyColor, sunIntensity);
   hemiLight.groundColor.lerpColors(nightGroundColor, dayGroundColor, sunIntensity);
   scene.background.lerpColors(nightSkyColor, daySkyColor, sunIntensity);
+  // Adjust street lights brightness: on at night, off during day
+  streetLights.forEach(light => {
+    light.intensity = light.userData.baseIntensity * (1 - sunIntensity);
+  });
 }
 // Coordinate display element
 let coordsDiv;
@@ -51,6 +55,8 @@ let velocity = new THREE.Vector3();
 // Collision detection: collidable meshes and boxes
 const collidableMeshes = [];
 const collidableBoxes = [];
+// Street lights (collected from worldBuilder)
+let streetLights = [];
 // Physics world and player body
 let world, playerBody;
 // Jump request flag
@@ -107,6 +113,8 @@ function init() {
   const worldData = buildWorld({ scene, collidableMeshes, collidableBoxes, cameraHeight, playerBoundingRadius });
   world = worldData.world;
   playerBody = worldData.playerBody;
+  // Retrieve street lights created in worldBuilder
+  streetLights = worldData.streetLights || [];
   // Create a sample house at origin
   createHouse({ scene, collidableMeshes, collidableBoxes, world }, { position: new THREE.Vector3(0, 0, -10) });
 

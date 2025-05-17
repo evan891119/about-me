@@ -11,7 +11,7 @@ import * as CANNON from 'cannon-es';
  * @param {Array<THREE.Box3>} params.collidableBoxes - Array to populate with bounding boxes
  * @param {number} params.cameraHeight - Initial camera/player height
  * @param {number} params.playerBoundingRadius - Radius for player collision sphere
- * @returns {{world: CANNON.World, playerBody: CANNON.Body}}
+ * @returns {{world: CANNON.World, playerBody: CANNON.Body, streetLights: Array<THREE.PointLight>}}
  */
 export function buildWorld({ scene, collidableMeshes, collidableBoxes, cameraHeight, playerBoundingRadius }) {
   // Floor with checker pattern
@@ -82,7 +82,49 @@ export function buildWorld({ scene, collidableMeshes, collidableBoxes, cameraHei
     world.addBody(boxBody);
   });
 
-  return { world, playerBody };
+  // Add road and street lights
+  const roadWidth = 6;
+  const roadLength = 200;
+  // Road surface
+  const roadGeo = new THREE.PlaneGeometry(roadWidth, roadLength);
+  const roadMat = new THREE.MeshStandardMaterial({ color: 0x333333 });
+  const road = new THREE.Mesh(roadGeo, roadMat);
+  road.rotation.x = -Math.PI / 2;
+  road.position.set(0, 0.01, 0);
+  scene.add(road);
+
+  // Street lights
+  const streetLights = [];
+  const poleHeight = 5;
+  const poleRadius = 0.05;
+  const lampRadius = 0.2;
+  const spacing = 20;
+  const sideOffset = roadWidth / 2 + 1;
+  for (let z = -roadLength / 2 + spacing / 2; z <= roadLength / 2; z += spacing) {
+    [-1, 1].forEach(side => {
+      const x = side * sideOffset;
+      // Pole
+      const poleGeo = new THREE.CylinderGeometry(poleRadius, poleRadius, poleHeight);
+      const poleMat = new THREE.MeshStandardMaterial({ color: 0x555555 });
+      const pole = new THREE.Mesh(poleGeo, poleMat);
+      pole.position.set(x, poleHeight / 2, z);
+      scene.add(pole);
+      // Lamp mesh
+      const lampGeo = new THREE.SphereGeometry(lampRadius, 8, 8);
+      const lampMat = new THREE.MeshStandardMaterial({ color: 0xffffee, emissive: 0xffffee, emissiveIntensity: 1 });
+      const lamp = new THREE.Mesh(lampGeo, lampMat);
+      lamp.position.set(x, poleHeight + lampRadius, z);
+      scene.add(lamp);
+      // Light source
+      const light = new THREE.PointLight(0xffffff, 1, 20);
+      light.position.copy(lamp.position);
+      scene.add(light);
+      light.userData.baseIntensity = 1;
+      streetLights.push(light);
+    });
+  }
+
+  return { world, playerBody, streetLights };
 }
 /**
  * Create a simple house composed of a box (walls) and a cone (roof).
