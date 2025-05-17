@@ -195,6 +195,8 @@ function animate() {
   // Collision-aware movement: separate axis handling
   const deltaX = -velocity.x * delta;
   const deltaZ = -velocity.z * delta;
+  // compute player foot Y for collision height check
+  const footY = controls.getObject().position.y - cameraHeight;
   // Move along local X (left/right)
   if (deltaX !== 0) {
     // direction vector for X
@@ -209,7 +211,9 @@ function animate() {
     // test against collidable boxes
     let blockedX = false;
     for (let i = 0; i < collidableBoxes.length; i++) {
-      if (collidableBoxes[i].intersectsSphere(sphereX)) {
+      const box = collidableBoxes[i];
+      // only block collision when foot is below top of box
+      if (footY < box.max.y && box.intersectsSphere(sphereX)) {
         blockedX = true;
         break;
       }
@@ -268,7 +272,9 @@ function animate() {
     const sphereZ = new THREE.Sphere(new THREE.Vector3(nextPosZ.x, playerHeight, nextPosZ.z), playerBoundingRadius);
     let blockedZ = false;
     for (let i = 0; i < collidableBoxes.length; i++) {
-      if (collidableBoxes[i].intersectsSphere(sphereZ)) {
+      const box = collidableBoxes[i];
+      // only block collision when foot is below top of box
+      if (footY < box.max.y && box.intersectsSphere(sphereZ)) {
         blockedZ = true;
         break;
       }
