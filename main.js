@@ -266,12 +266,31 @@ function init() {
   document.addEventListener('keydown', onKeyDown);
   document.addEventListener('keyup', onKeyUp);
   window.addEventListener('resize', onWindowResize);
+  // Listen for left-click to interact with objects
+  document.addEventListener('mousedown', onMouseDown, false);
 }
 
 function onWindowResize() {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
+}
+/**
+ * Handles mouse down events for object interaction via raycasting.
+ */
+function onMouseDown(event) {
+  // 0: left button
+  if (event.button !== 0) return;
+  // Raycast from camera center
+  const mouse = new THREE.Vector2(0, 0);
+  raycaster.setFromCamera(mouse, camera);
+  // Check intersections against interactable meshes
+  const intersects = raycaster.intersectObjects(collidableMeshes, true);
+  if (intersects.length > 0) {
+    console.log('Clicked object:', intersects[0].object);
+  } else {
+    console.log('Clicked nothing');
+  }
 }
 
 function animate() {

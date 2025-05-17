@@ -19,6 +19,19 @@
       font-size: 20px;
       cursor: pointer;
     }
+    /* Crosshair at center */
+    #crosshair {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 8px;
+      height: 8px;
+      background: rgba(255, 255, 255, 0.8);
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+      z-index: 5;
+    }
   </style>
   <!-- Import map for bare module specifier 'three' -->
   <script type="importmap">
@@ -32,6 +45,7 @@
 </head>
 <body>
   <div id="blocker">點擊進入 3D 博物館</div>
+  <div id="crosshair"></div>
   <script type="module" src="main.js"></script>
 </body>
 </html>
