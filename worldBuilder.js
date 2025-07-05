@@ -127,7 +127,7 @@ export function buildWorld({ scene, collidableMeshes, collidableBoxes, cameraHei
   return { world, playerBody, streetLights };
 }
 /**
- * Create a simple house composed of a box (walls) and a cone (roof).
+ * Create a simple house composed of a box (walls) and a pyramid roof.
  * @param {object} params
  * @param {THREE.Scene} params.scene
  * @param {Array<THREE.Mesh>} params.collidableMeshes
@@ -140,15 +140,34 @@ export function buildWorld({ scene, collidableMeshes, collidableBoxes, cameraHei
  * @param {number} [options.depth=4]
  * @param {string|number} [options.wallColor=0xFFFFFF]
  * @param {string|number} [options.roofColor=0x882200]
+ * @param {object} [options.sign] - Optional signboard content on the front header panel.
+ * @param {'text'|'image'} [options.sign.type] - Type of sign content ('text' or 'image').
+ * @param {string} [options.sign.text] - Text to display when type is 'text'.
+ * @param {string} [options.sign.font] - CSS font style for sign text (e.g. '48px Arial').
+ * @param {string} [options.sign.color] - Sign text color (e.g. '#000000').
+ * @param {string} [options.sign.backgroundColor] - Background color behind sign text.
+ * @param {string} [options.sign.src] - Image source URL when type is 'image'.
+ * @param {object} [options.interior] - Optional interior content for house walls.
+ * @param {object} [options.interior.left] - Content for the left side interior wall.
+ * @param {object} [options.interior.back] - Content for the back interior wall.
+ * @param {object} [options.interior.right] - Content for the right side interior wall.
+ * @param {'text'|'image'} [options.interior.X.type] - Type of interior content ('text' or 'image') for each wall.
+ * @param {string} [options.interior.X.text] - Text to display when type is 'text'.
+ * @param {string} [options.interior.X.font] - CSS font style for interior text.
+ * @param {string} [options.interior.X.color] - Interior text color.
+ * @param {string} [options.interior.X.backgroundColor] - Background color behind interior text.
+ * @param {string} [options.interior.X.src] - Image source URL for interior image.
  * @returns {THREE.Group}
  */
 export function createHouse({ scene, collidableMeshes, collidableBoxes, world }, {
   position = new THREE.Vector3(),
   width = 4,
   height = 2.5,
-  depth = 4,
+  depth = 8,
   wallColor = 0xFFFFFF,
-  roofColor = 0x882200
+  roofColor = 0x882200,
+  sign = null,
+  interior = null
 } = {}) {
   const house = new THREE.Group();
   // Calculate door dimensions
@@ -156,15 +175,41 @@ export function createHouse({ scene, collidableMeshes, collidableBoxes, world },
   const doorHeight = height * 0.6;
   const doorThickness = 0.05;
   // Walls will be constructed as individual panels (front, back, sides) with a door opening
-  // Roof as pyramid (cone with 4 sides)
+  // Roof as rectangular pyramid with 4 triangular faces
   const roofHeight = height * 0.6;
-  const radius = Math.max(width, depth) * 0.6;
-  const roofGeo = new THREE.ConeGeometry(radius, roofHeight, 4);
-  const roofMat = new THREE.MeshStandardMaterial({ color: roofColor });
+  const apexY = height + roofHeight;
+  const halfW = width / 2;
+  const halfD = depth / 2;
+  // vertices for 4 faces: apex + two base corners
+  const vertices = new Float32Array([
+    // front face
+    0, apexY, 0,   halfW, height, -halfD,   -halfW, height, -halfD,
+    // right face
+    0, apexY, 0,   halfW, height, halfD,    halfW, height, -halfD,
+    // back face
+    0, apexY, 0,   -halfW, height, halfD,   halfW, height, halfD,
+    // left face
+    0, apexY, 0,   -halfW, height, -halfD,  -halfW, height, halfD,
+  ]);
+  const roofGeo = new THREE.BufferGeometry();
+  roofGeo.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
+  roofGeo.computeVertexNormals();
+  // Roof material: render both sides so interior roof is visible from inside
+  const roofMat = new THREE.MeshStandardMaterial({ color: roofColor, side: THREE.DoubleSide });
   const roof = new THREE.Mesh(roofGeo, roofMat);
-  roof.rotation.y = Math.PI/4; // align square roof
-  roof.position.set(0, height + roofHeight/2, 0);
   house.add(roof);
+  // Register roof for raycast and add physics collision (trimesh)
+  collidableMeshes.push(roof);
+  collidableBoxes.push(new THREE.Box3().setFromObject(roof));
+  // Build physics shape from roof geometry
+  // Each 3 vertices form a triangle: indices [0,1,2, 3,4,5, 6,7,8, 9,10,11]
+  const roofIndices = Array.from({ length: vertices.length / 3 }, (_, i) => i);
+  const roofShape = new CANNON.Trimesh(vertices, roofIndices);
+  const roofBody = new CANNON.Body({ mass: 0 });
+  roofBody.addShape(roofShape);
+  // Position body at house base
+  roofBody.position.set(position.x, position.y, position.z);
+  world.addBody(roofBody);
   // Build front wall panels around door opening
   {
     const panelThickness = doorThickness;
@@ -191,32 +236,119 @@ export function createHouse({ scene, collidableMeshes, collidableBoxes, world },
     rightBody.addShape(new CANNON.Box(new CANNON.Vec3(leftPanelWidth/2, height/2, panelThickness/2)));
     rightBody.position.set(position.x + rightPanel.position.x, position.y + rightPanel.position.y, position.z + rightPanel.position.z);
     world.addBody(rightBody);
-    // Front header panel
+    // Front header panel (signboard)
     const headerHeight = height - doorHeight;
     const headerGeo = new THREE.BoxGeometry(doorWidth, headerHeight, panelThickness);
-    const headerPanel = new THREE.Mesh(headerGeo, panelMat);
-    headerPanel.position.set(0, doorHeight + headerHeight/2, depth/2 - panelThickness/2);
+    let headerPanel;
+    if (sign) {
+      let signTex;
+      if (sign.type === 'text') {
+        const canvas2 = document.createElement('canvas');
+        canvas2.width = 512;
+        canvas2.height = 256;
+        const ctx2 = canvas2.getContext('2d');
+        ctx2.fillStyle = sign.backgroundColor || '#ffffff';
+        ctx2.fillRect(0, 0, canvas2.width, canvas2.height);
+        ctx2.fillStyle = sign.color || '#000000';
+        ctx2.font = sign.font || '48px sans-serif';
+        ctx2.textAlign = 'center';
+        ctx2.textBaseline = 'middle';
+        ctx2.fillText(sign.text, canvas2.width / 2, canvas2.height / 2);
+        signTex = new THREE.CanvasTexture(canvas2);
+        signTex.needsUpdate = true;
+      } else if (sign.type === 'image') {
+        signTex = new THREE.TextureLoader().load(sign.src);
+      }
+      const blankMat = panelMat;
+      const signMat = new THREE.MeshStandardMaterial({ map: signTex, side: THREE.FrontSide });
+      const materials = [blankMat, blankMat, blankMat, blankMat, signMat, blankMat];
+      headerPanel = new THREE.Mesh(headerGeo, materials);
+    } else {
+      headerPanel = new THREE.Mesh(headerGeo, panelMat);
+    }
+    headerPanel.position.set(0, doorHeight + headerHeight / 2, depth / 2 - panelThickness / 2);
     house.add(headerPanel);
     collidableMeshes.push(headerPanel);
     collidableBoxes.push(new THREE.Box3().setFromObject(headerPanel));
     const headerBody = new CANNON.Body({ mass: 0 });
-    headerBody.addShape(new CANNON.Box(new CANNON.Vec3(doorWidth/2, headerHeight/2, panelThickness/2)));
-    headerBody.position.set(position.x + headerPanel.position.x, position.y + headerPanel.position.y, position.z + headerPanel.position.z);
+    headerBody.addShape(new CANNON.Box(new CANNON.Vec3(doorWidth / 2, headerHeight / 2, panelThickness / 2)));
+    headerBody.position.set(
+      position.x + headerPanel.position.x,
+      position.y + headerPanel.position.y,
+      position.z + headerPanel.position.z
+    );
     world.addBody(headerBody);
-    // Back wall panel
+
+    // Back wall panel (interior content)
     const backGeo = new THREE.BoxGeometry(width, height, panelThickness);
-    const backPanel = new THREE.Mesh(backGeo, panelMat);
-    backPanel.position.set(0, height/2, -depth/2 + panelThickness/2);
+    let backPanel;
+    if (interior && interior.back) {
+      let interiorTex;
+      if (interior.back.type === 'text') {
+        const canvas3 = document.createElement('canvas');
+        canvas3.width = 512;
+        canvas3.height = 256;
+        const ctx3 = canvas3.getContext('2d');
+        ctx3.fillStyle = interior.back.backgroundColor || '#ffffff';
+        ctx3.fillRect(0, 0, canvas3.width, canvas3.height);
+        ctx3.fillStyle = interior.back.color || '#000000';
+        ctx3.font = interior.back.font || '48px sans-serif';
+        ctx3.textAlign = 'center';
+        ctx3.textBaseline = 'middle';
+        ctx3.fillText(interior.back.text, canvas3.width / 2, canvas3.height / 2);
+        interiorTex = new THREE.CanvasTexture(canvas3);
+        interiorTex.needsUpdate = true;
+      } else if (interior.back.type === 'image') {
+        interiorTex = new THREE.TextureLoader().load(interior.back.src);
+      }
+      const blankMat = panelMat;
+      const interiorMat = new THREE.MeshStandardMaterial({ map: interiorTex, side: THREE.FrontSide });
+      const materials = [blankMat, blankMat, blankMat, blankMat, interiorMat, blankMat];
+      backPanel = new THREE.Mesh(backGeo, materials);
+    } else {
+      backPanel = new THREE.Mesh(backGeo, panelMat);
+    }
+    backPanel.position.set(0, height / 2, -depth / 2 + panelThickness / 2);
     house.add(backPanel);
     collidableMeshes.push(backPanel);
     collidableBoxes.push(new THREE.Box3().setFromObject(backPanel));
     const backBody = new CANNON.Body({ mass: 0 });
-    backBody.addShape(new CANNON.Box(new CANNON.Vec3(width/2, height/2, panelThickness/2)));
-    backBody.position.set(position.x + backPanel.position.x, position.y + backPanel.position.y, position.z + backPanel.position.z);
+    backBody.addShape(new CANNON.Box(new CANNON.Vec3(width / 2, height / 2, panelThickness / 2)));
+    backBody.position.set(
+      position.x + backPanel.position.x,
+      position.y + backPanel.position.y,
+      position.z + backPanel.position.z
+    );
     world.addBody(backBody);
-    // Left side wall panel
+    // Left side wall panel (interior content)
     const leftSideGeo = new THREE.BoxGeometry(panelThickness, height, depth);
-    const leftSide = new THREE.Mesh(leftSideGeo, panelMat);
+    let leftSide;
+    if (interior && interior.left) {
+      let interiorTexLeft;
+      if (interior.left.type === 'text') {
+        const canvasL = document.createElement('canvas');
+        canvasL.width = 512;
+        canvasL.height = 256;
+        const ctxL = canvasL.getContext('2d');
+        ctxL.fillStyle = interior.left.backgroundColor || '#ffffff';
+        ctxL.fillRect(0, 0, canvasL.width, canvasL.height);
+        ctxL.fillStyle = interior.left.color || '#000000';
+        ctxL.font = interior.left.font || '48px sans-serif';
+        ctxL.textAlign = 'center';
+        ctxL.textBaseline = 'middle';
+        ctxL.fillText(interior.left.text, canvasL.width / 2, canvasL.height / 2);
+        interiorTexLeft = new THREE.CanvasTexture(canvasL);
+        interiorTexLeft.needsUpdate = true;
+      } else if (interior.left.type === 'image') {
+        interiorTexLeft = new THREE.TextureLoader().load(interior.left.src);
+      }
+      const blankMat = panelMat;
+      const interiorMatL = new THREE.MeshStandardMaterial({ map: interiorTexLeft, side: THREE.FrontSide });
+      const matsL = [interiorMatL, blankMat, blankMat, blankMat, blankMat, blankMat];
+      leftSide = new THREE.Mesh(leftSideGeo, matsL);
+    } else {
+      leftSide = new THREE.Mesh(leftSideGeo, panelMat);
+    }
     leftSide.position.set(-width/2 + panelThickness/2, height/2, 0);
     house.add(leftSide);
     collidableMeshes.push(leftSide);
@@ -225,9 +357,35 @@ export function createHouse({ scene, collidableMeshes, collidableBoxes, world },
     leftSideBody.addShape(new CANNON.Box(new CANNON.Vec3(panelThickness/2, height/2, depth/2)));
     leftSideBody.position.set(position.x + leftSide.position.x, position.y + leftSide.position.y, position.z + leftSide.position.z);
     world.addBody(leftSideBody);
-    // Right side wall panel
+    // Right side wall panel (interior content)
     const rightSideGeo = new THREE.BoxGeometry(panelThickness, height, depth);
-    const rightSide = new THREE.Mesh(rightSideGeo, panelMat);
+    let rightSide;
+    if (interior && interior.right) {
+      let interiorTexR;
+      if (interior.right.type === 'text') {
+        const canvasR = document.createElement('canvas');
+        canvasR.width = 512;
+        canvasR.height = 256;
+        const ctxR = canvasR.getContext('2d');
+        ctxR.fillStyle = interior.right.backgroundColor || '#ffffff';
+        ctxR.fillRect(0, 0, canvasR.width, canvasR.height);
+        ctxR.fillStyle = interior.right.color || '#000000';
+        ctxR.font = interior.right.font || '48px sans-serif';
+        ctxR.textAlign = 'center';
+        ctxR.textBaseline = 'middle';
+        ctxR.fillText(interior.right.text, canvasR.width / 2, canvasR.height / 2);
+        interiorTexR = new THREE.CanvasTexture(canvasR);
+        interiorTexR.needsUpdate = true;
+      } else if (interior.right.type === 'image') {
+        interiorTexR = new THREE.TextureLoader().load(interior.right.src);
+      }
+      const blankMat = panelMat;
+      const interiorMatR = new THREE.MeshStandardMaterial({ map: interiorTexR, side: THREE.FrontSide });
+      const matsR = [blankMat, interiorMatR, blankMat, blankMat, blankMat, blankMat];
+      rightSide = new THREE.Mesh(rightSideGeo, matsR);
+    } else {
+      rightSide = new THREE.Mesh(rightSideGeo, panelMat);
+    }
     rightSide.position.set(width/2 - panelThickness/2, height/2, 0);
     house.add(rightSide);
     collidableMeshes.push(rightSide);
@@ -277,17 +435,6 @@ export function createHouse({ scene, collidableMeshes, collidableBoxes, world },
   // Position group
   house.position.copy(position);
   scene.add(house);
-  // Register roof for raycast and add physics body
-  collidableMeshes.push(roof);
-  collidableBoxes.push(new THREE.Box3().setFromObject(roof));
-  const roofSphere = new CANNON.Sphere(radius);
-  const roofBody = new CANNON.Body({ mass: 0 });
-  roofBody.addShape(roofSphere);
-  roofBody.position.set(
-    position.x,
-    position.y + height + roofHeight/2,
-    position.z
-  );
-  world.addBody(roofBody);
+  // (Roof collisions are omitted)
   return house;
 }

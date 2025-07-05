@@ -11,6 +11,8 @@ import { buildWorld, createHouse } from './worldBuilder.js';
 
 // Core components
 let camera, scene, renderer, controls;
+// Flashlight (spotlight) to follow camera
+let flashlight, flashlightTarget;
 // Light components and colors for day/night cycle
 let hemiLight, dirLight;
 const daySkyColor = new THREE.Color(0x87CEEB);
@@ -115,8 +117,90 @@ function init() {
   playerBody = worldData.playerBody;
   // Retrieve street lights created in worldBuilder
   streetLights = worldData.streetLights || [];
-  // Create a sample house at origin
-  createHouse({ scene, collidableMeshes, collidableBoxes, world }, { position: new THREE.Vector3(0, 0, -10) });
+  // Create houses with customizable intro content
+  const houseOffset = 6; // horizontal distance from center of the road
+  // z positions for house rows
+  const zPositions = [-15, 5];
+  // Define configuration for each house (position, signboard content, and interior content)
+  const houseConfigs = [
+    {
+      position: new THREE.Vector3(-houseOffset, 0, zPositions[0]),
+      sign: {
+        type: 'text',
+        text: '歡迎來到我的3D世界',
+        color: '#000000',
+        backgroundColor: '#ffffff',
+        font: '48px Arial'
+      },
+      interior: {
+        back: { type: 'image', src: 'images/photo1.png' }
+      }
+    },
+    {
+      position: new THREE.Vector3(houseOffset, 0, zPositions[0]),
+      sign: { type: 'image', src: 'images/photo1.png' },
+      interior: {
+        back: {
+          type: 'text',
+          text: '這是房子裡面的文字內容',
+          color: '#000000',
+          backgroundColor: '#ffffff',
+          font: '24px sans-serif'
+        }
+      }
+    },
+    {
+      position: new THREE.Vector3(-houseOffset, 0, zPositions[1]),
+      sign: { type: 'image', src: 'images/photo1.png' },
+      interior: { back: { type: 'image', src: 'images/photo1.png' } }
+    },
+    {
+      position: new THREE.Vector3(houseOffset, 0, zPositions[1]),
+      sign: {
+        type: 'text',
+        text: '我是張正誠，熱愛程式設計',
+        color: '#ffffff',
+        backgroundColor: '#000000',
+        font: '36px sans-serif'
+      },
+      interior: {
+        back: {
+          type: 'text',
+          text: '內部: 這裡是房子裡面',
+          color: '#0000ff',
+          backgroundColor: '#ffffff',
+          font: '24px sans-serif'
+        },
+        left: {
+          type: 'text',
+          text: '內部: 這裡是房子左邊牆面',
+          color: '#0000ff',
+          backgroundColor: '#000000',
+          font: '24px sans-serif'
+        },
+        right: {
+          type: 'text',
+          text: '內部: 這裡是房子右邊牆面',
+          color: '#ffffff',
+          backgroundColor: '#000000',
+          font: '24px sans-serif'
+        }
+      }
+    }
+  ];
+  houseConfigs.forEach(cfg => {
+    createHouse(
+      { scene, collidableMeshes, collidableBoxes, world },
+      cfg
+    );
+  });
+  // Setup flashlight (spotlight) to follow the camera
+  flashlight = new THREE.SpotLight(0xffffff, 2, 30, Math.PI / 8, 0.5);
+  flashlight.castShadow = true;
+  scene.add(flashlight);
+  flashlightTarget = new THREE.Object3D();
+  scene.add(flashlightTarget);
+  flashlight.target = flashlightTarget;
 
   renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setSize(window.innerWidth, window.innerHeight);
@@ -280,7 +364,7 @@ function animate() {
   if (moveBackward) moveDir.sub(forward);
   if (moveRight) moveDir.add(right);
   if (moveLeft) moveDir.sub(right);
-  // Apply horizontal input
+  // Apply movement with constant speed regardless of direction
   if (moveDir.length() > 0) {
     moveDir.normalize().multiplyScalar(speed);
     playerBody.velocity.x = moveDir.x;
@@ -294,6 +378,15 @@ function animate() {
   world.step(1/60, delta, 3);
   // Sync camera to physics body
   controls.getObject().position.copy(playerBody.position);
+  // Update flashlight position and target to follow camera direction
+  // Get camera world position
+  const camPos = new THREE.Vector3();
+  camera.getWorldPosition(camPos);
+  flashlight.position.copy(camPos);
+  // Compute camera forward direction and position the flashlight target ahead
+  const dir = new THREE.Vector3();
+  camera.getWorldDirection(dir);
+  flashlightTarget.position.copy(camPos).add(dir.multiplyScalar(10));
   // Update coordinate display
   if (coordsDiv) {
     const p = playerBody.position;
