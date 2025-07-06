@@ -7,10 +7,20 @@ import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.152.2/examples/
 // Import WebGL detection helper
 // WebGL detection helper (default export)
 import WebGL from 'https://cdn.jsdelivr.net/npm/three@0.152.2/examples/jsm/capabilities/WebGL.js';
+// Moon position calculations
+import { getMoonPosition, getMoonIllumination } from 'https://cdn.skypack.dev/suncalc';
+// Sky shader for dynamic sky
+import { Sky } from 'https://cdn.jsdelivr.net/npm/three@0.152.2/examples/jsm/objects/Sky.js';
 import { buildWorld, createHouse } from './worldBuilder.js';
 
 // Core components
+// Core components
 let camera, scene, renderer, controls;
+// Dynamic sky and starfield
+// Dynamic sky, starfield and moon
+let sky, stars, moon;
+// Offscreen canvas and drawing function for moon phases
+let moonCanvas, moonCtx, moonTexture, drawMoonPhase;
 // Flashlight (spotlight) to follow camera
 let flashlight, flashlightTarget;
 // Light components and colors for day/night cycle
@@ -26,6 +36,8 @@ const nightGroundColor = new THREE.Color(0x111111);
  */
 function updateLighting() {
   if (!dirLight || !hemiLight || !scene) return;
+  // Use actual current date and time for sun and moon calculations
+  // Use current date/time for sun and moon calculations
   const now = new Date();
   const hours = now.getHours() + now.getMinutes() / 60;
   const angle = (hours / 24) * Math.PI * 2 - Math.PI / 2;
@@ -39,7 +51,30 @@ function updateLighting() {
   hemiLight.intensity = hemiIntensity;
   hemiLight.color.lerpColors(nightSkyColor, daySkyColor, sunIntensity);
   hemiLight.groundColor.lerpColors(nightGroundColor, dayGroundColor, sunIntensity);
-  scene.background.lerpColors(nightSkyColor, daySkyColor, sunIntensity);
+  // Background handled by Sky shader; update its sun position and star visibility
+  if (sky) sky.material.uniforms['sunPosition'].value.copy(dirLight.position);
+  if (stars) stars.visible = (sunIntensity < 0.2);
+  // Update moon position and visibility based on current time and sphere radius
+  if (moon) {
+    const moonPos = getMoonPosition(now, 25.0330, 121.5654); // latitude and longitude default to 0 if not provided
+    const mAz = moonPos.azimuth;
+    const mAlt = moonPos.altitude;
+    const r = 400;
+    const mx = r * Math.cos(mAlt) * Math.sin(mAz);
+    const my = r * Math.sin(mAlt);
+    const mz = r * Math.cos(mAlt) * Math.cos(mAz);
+    moon.position.set(mx, my, mz);
+    moon.visible = mAlt > 0;
+    // Update moon phase shading based on current date
+    const illum = getMoonIllumination(now);
+    drawMoonPhase(illum.fraction);
+    // Adjust moon scale: base on real angular diameter (~0.5°) but scaled up for visibility
+    const angularDiameter = 0.5 * Math.PI / 180;
+    const diameter = 2 * r * Math.tan(angularDiameter / 2);
+    // scaleFactor tweaks visual size; ~6000 yields a similar size to original default
+    const scaleFactor = 6;
+    moon.scale.set(diameter * scaleFactor, diameter * scaleFactor, 1);
+  }
   // Adjust street lights brightness: on at night, off during day
   streetLights.forEach(light => {
     light.intensity = light.userData.baseIntensity * (1 - sunIntensity);
@@ -90,8 +125,76 @@ if ( WebGL.isWebGLAvailable() ) {
 }
 
 function init() {
+  // Scene and dynamic sky background
   scene = new THREE.Scene();
-  scene.background = new THREE.Color(0xddddff);
+  // Remove default background color; use Sky shader
+  scene.background = null;
+  // Add dynamic sky
+  sky = new Sky();
+  sky.scale.setScalar(450000);
+  scene.add(sky);
+  const skyUniforms = sky.material.uniforms;
+  skyUniforms['turbidity'].value = 10;
+  skyUniforms['rayleigh'].value = 2;
+  skyUniforms['mieCoefficient'].value = 0.005;
+  skyUniforms['mieDirectionalG'].value = 0.8;
+  // Starfield: randomly distributed points on a sphere at radius 400
+  {
+    const starCount = 10000;
+    const starPositions = new Float32Array(starCount * 3);
+    for (let i = 0; i < starCount; i++) {
+      const theta = Math.random() * 2 * Math.PI;
+      const phi = Math.acos(2 * Math.random() - 1);
+      const r = 400;
+      starPositions[i * 3] = r * Math.sin(phi) * Math.cos(theta);
+      starPositions[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
+      starPositions[i * 3 + 2] = r * Math.cos(phi);
+    }
+    const starGeometry = new THREE.BufferGeometry();
+    starGeometry.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
+    const starMaterial = new THREE.PointsMaterial({ color: 0xffffff, size: 1, sizeAttenuation: false });
+    stars = new THREE.Points(starGeometry, starMaterial);
+    stars.visible = false;
+    scene.add(stars);
+  }
+  // Moon sprite with phase support
+  {
+    // Offscreen canvas for moon rendering
+    moonCanvas = document.createElement('canvas');
+    moonCanvas.width = moonCanvas.height = 256;
+    moonCtx = moonCanvas.getContext('2d');
+    // Create texture and sprite
+    moonTexture = new THREE.CanvasTexture(moonCanvas);
+    const moonMaterial = new THREE.SpriteMaterial({ map: moonTexture, transparent: true });
+    moon = new THREE.Sprite(moonMaterial);
+    // Initial scale; will be updated in updateLighting
+    moon.scale.set(20000, 20000, 1);
+    scene.add(moon);
+    // Drawing function for moon phase
+    drawMoonPhase = function(fraction) {
+      const cx = 128, cy = 128, r = 128;
+      moonCtx.clearRect(0, 0, 256, 256);
+      // Base glow gradient
+      const grad = moonCtx.createRadialGradient(cx, cy, r * 0.5, cx, cy, r);
+      grad.addColorStop(0, 'rgba(255,255,220,1)');
+      grad.addColorStop(1, 'rgba(255,255,220,0)');
+      moonCtx.fillStyle = grad;
+      moonCtx.beginPath();
+      moonCtx.arc(cx, cy, r, 0, Math.PI * 2);
+      moonCtx.fill();
+      // Shadow mask (remove illuminated fraction)
+      moonCtx.globalCompositeOperation = 'destination-out';
+      const offsetX = 2 * r * fraction;
+      moonCtx.beginPath();
+      moonCtx.arc(cx + offsetX, cy, r, 0, Math.PI * 2);
+      moonCtx.fill();
+      moonCtx.globalCompositeOperation = 'source-over';
+      moonTexture.needsUpdate = true;
+    };
+    // Initial phase draw
+    const illum = getMoonIllumination(new Date());
+    drawMoonPhase(illum.fraction);
+  }
 
   camera = new THREE.PerspectiveCamera(
     75,
@@ -266,6 +369,10 @@ function init() {
         break;
       case 'Space':
         jumpRequested = true;
+        break;
+      case 'KeyE':
+        // Toggle flashlight visibility on 'E' key press (once per press)
+        if (!event.repeat) flashlight.visible = !flashlight.visible;
         break;
     }
   };
