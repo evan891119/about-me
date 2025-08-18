@@ -18,11 +18,24 @@ import { buildWorld, createHouse } from './worldBuilder.js';
 // Core components
 let camera, scene, renderer, controls;
 let rapierWorld, controller, playerRB, playerCol; // Rapier 物理
+const WALK_SPEED   = 6;     // 地面速度（m/s）
+const AIR_MULT     = 0.35;  // 空中速度比例
+const SPRINT_MULT  = 1.5;   // 衝刺倍數
+let sprinting = false;
+
 // Dynamic sky and starfield
 // Dynamic sky, starfield and moon
 let sky, stars, moon;
 // Offscreen canvas and drawing function for moon phases
 let moonCanvas, moonCtx, moonTexture, drawMoonPhase;
+
+// 管理所有門（mesh + pivot + 其對應的 Rapier 剛體）
+const doorEntries = [];
+
+// 小工具：lerp + 平滑曲線
+function lerp(a, b, t) { return a + (b - a) * t; }
+function easeInOut(t) { return t < 0.5 ? 2*t*t : 1 - Math.pow(-2*t + 2, 2)/2; }
+
 // Flashlight (spotlight) to follow camera
 let flashlight, flashlightTarget;
 // Light components and colors for day/night cycle
@@ -115,10 +128,8 @@ const raycaster = new THREE.Raycaster();
 
 // Check for WebGL support before initializing
 if ( WebGL.isWebGLAvailable() ) {
-    if (WebGL.isWebGLAvailable()) {
-        init().then(() => animate());
-    }
-    } else {
+    init().then(() => animate());
+} else {
     // Add WebGL error message to the page
     const warning = WebGL.getWebGLErrorMessage();
     warning.style.position = 'absolute';
@@ -346,8 +357,54 @@ async function init() {
         );
     }
 
+    function makeKinematicDoorCollider(mesh) {
+        const pivot = mesh.userData.doorPivot;
+        if (!pivot) return;
+
+        // 由幾何參數取得半尺寸（比 AABB 精準）
+        const gp = mesh.geometry?.parameters || {};
+        const half = {
+            x: (gp.width  ?? 0.5) / 2,
+            y: (gp.height ?? 1.8) / 2,
+            z: (gp.depth  ?? 0.05) / 2,
+        };
+
+        // 讀取門板目前世界姿態
+        mesh.updateWorldMatrix(true, true);
+        const pos = new THREE.Vector3(); mesh.getWorldPosition(pos);
+        const q   = new THREE.Quaternion(); mesh.getWorldQuaternion(q);
+
+        // 建立 kinematic 剛體 + cuboid collider（與門板同姿態）
+        const rbDesc = RAPIER.RigidBodyDesc
+            .kinematicPositionBased()
+            .setTranslation(pos.x, pos.y, pos.z)
+            .setRotation({ x:q.x, y:q.y, z:q.z, w:q.w });
+        const rb  = rapierWorld.createRigidBody(rbDesc);
+        const col = rapierWorld.createCollider(
+            RAPIER.ColliderDesc.cuboid(half.x, half.y, half.z),
+            rb
+        );
+
+        // 存參考，動畫時用
+        mesh.userData.doorRB = rb;
+        mesh.userData.doorCollider = col;
+
+        // 動畫狀態預設值（若 createHouse 已設 isOpen=false 會沿用）
+        pivot.userData.animating = false;
+        pivot.userData.animTime = 0;
+        pivot.userData.animDuration = 0.6; // 動畫秒數
+        // 註冊進門清單，animate() 會每幀同步碰撞器
+        doorEntries.push({ mesh, pivot, rb });
+    }
+
+    // 1) 一般方塊/牆：轉成 Rapier 靜態 collider（略過門）
     collidableMeshes.forEach(m => {
+        if (m.userData?.isDoor) return; // 門另建 collider
         if (m.geometry?.parameters?.width !== undefined) addColliderForBoxMesh(m); // BoxGeometry
+    });
+    // 2) 門：建立單一 kinematic 碰撞器，之後每幀同步
+    collidableMeshes.forEach(m => {
+    if (m.userData?.isDoor) makeKinematicDoorCollider(m);
     });
 
     // Setup flashlight (spotlight) to follow the camera
@@ -410,52 +467,59 @@ async function init() {
     });
 
     const onKeyDown = (event) => {
-    switch (event.code) {
-        case 'KeyW':
-        case 'ArrowUp':
-        moveForward = true;
-        break;
-        case 'KeyA':
-        case 'ArrowLeft':
-        moveLeft = true;
-        break;
-        case 'KeyS':
-        case 'ArrowDown':
-        moveBackward = true;
-        break;
-        case 'KeyD':
-        case 'ArrowRight':
-        moveRight = true;
-        break;
-        case 'Space':
-        jumpRequested = true;
-        break;
-        case 'KeyE':
-        // Toggle flashlight visibility on 'E' key press (once per press)
-        if (!event.repeat) flashlight.visible = !flashlight.visible;
-        break;
-    }
+        switch (event.code) {
+            case 'KeyW':
+            case 'ArrowUp':
+            moveForward = true;
+            break;
+            case 'KeyA':
+            case 'ArrowLeft':
+            moveLeft = true;
+            break;
+            case 'KeyS':
+            case 'ArrowDown':
+            moveBackward = true;
+            break;
+            case 'KeyD':
+            case 'ArrowRight':
+            moveRight = true;
+            break;
+            case 'Space':
+            jumpRequested = true;
+            break;
+            case 'KeyE':
+            // Toggle flashlight visibility on 'E' key press (once per press)
+            if (!event.repeat) flashlight.visible = !flashlight.visible;
+            break;
+            case 'ShiftLeft':
+            case 'ShiftRight':
+                sprinting = true; break;
+
+        }
     };
 
     const onKeyUp = (event) => {
-    switch (event.code) {
-        case 'KeyW':
-        case 'ArrowUp':
-        moveForward = false;
-        break;
-        case 'KeyA':
-        case 'ArrowLeft':
-        moveLeft = false;
-        break;
-        case 'KeyS':
-        case 'ArrowDown':
-        moveBackward = false;
-        break;
-        case 'KeyD':
-        case 'ArrowRight':
-        moveRight = false;
-        break;
-    }
+        switch (event.code) {
+            case 'KeyW':
+            case 'ArrowUp':
+            moveForward = false;
+            break;
+            case 'KeyA':
+            case 'ArrowLeft':
+            moveLeft = false;
+            break;
+            case 'KeyS':
+            case 'ArrowDown':
+            moveBackward = false;
+            break;
+            case 'KeyD':
+            case 'ArrowRight':
+            moveRight = false;
+            break;
+            case 'ShiftLeft':
+            case 'ShiftRight':
+                sprinting = false; break;
+        }
     };
 
     document.addEventListener('keydown', onKeyDown);
@@ -474,41 +538,43 @@ function onWindowResize() {
  * Handles mouse down events for object interaction via raycasting.
  */
 function onMouseDown(event) {
-    // 0: left button
     if (event.button !== 0) return;
-    // Raycast from camera center
+
     const mouse = new THREE.Vector2(0, 0);
     raycaster.setFromCamera(mouse, camera);
-    // Check intersections against interactable meshes
-    const intersects = raycaster.intersectObjects(collidableMeshes, true);
-    if (intersects.length > 0) {
-    const obj = intersects[0].object;
-    // Handle door interaction
-    if (obj.userData.isDoor && obj.userData.doorPivot) {
-        const pivot = obj.userData.doorPivot;
-        const doorBody = obj.userData.doorBody;
-        const open = !pivot.userData.isOpen;
-        // Rotate door mesh
-        pivot.rotation.y = open ? pivot.userData.openRotation : pivot.userData.closedRotation;
-        pivot.userData.isOpen = open;
-        // Toggle physics collision
-        // TODO: 等之後改成 Rapier 的門 collider，再用 collider.setEnabled(!open) 開關
+    const hits = raycaster.intersectObjects(collidableMeshes, true);
+    if (hits.length === 0) return;
 
-        // if (doorBody) {
-        // if (open) {
-        //     world.removeBody(doorBody);
-        // } else {
-        //     world.addBody(doorBody);
-        // }
-        // }
-        console.log(open ? 'Door opened' : 'Door closed');
-    } else {
-        console.log('Clicked object:', obj);
+    // 可能打到子物件 → 往上找 isDoor
+    let obj = hits[0].object;
+    while (obj && !obj.userData?.isDoor) obj = obj.parent;
+
+    if (!(obj && obj.userData.isDoor && obj.userData.doorPivot)) return;
+
+    const pivot = obj.userData.doorPivot;
+
+    //  距離限制：玩家到門樞軸 ≤ 2m 才能互動
+    const hingePos = new THREE.Vector3(); pivot.getWorldPosition(hingePos);
+    const pp = playerRB.translation();
+    const playerPos = new THREE.Vector3(pp.x, pp.y, pp.z);
+    const dist = hingePos.distanceTo(playerPos);
+    if (dist > 5.0) {
+        console.log(`Too far to open door: ${dist.toFixed(2)}m`);
+        return;
     }
-    } else {
-    console.log('Clicked nothing');
-    }
+
+    // 啟動平滑動畫：僅設定目標，不立刻瞬移
+    const open = !pivot.userData.isOpen;
+    pivot.userData.isOpen = open;
+    pivot.userData.animFrom = pivot.rotation.y;
+    pivot.userData.animTo   = open ? (pivot.userData.openRotation ?? -Math.PI/2)
+                                    : (pivot.userData.closedRotation ?? 0);
+    pivot.userData.animTime = 0;
+    pivot.userData.animating = true;
+
+    console.log(open ? 'Door opening...' : 'Door closing...');
 }
+
 
 function animate() {
     requestAnimationFrame(animate);
@@ -546,21 +612,20 @@ function animate() {
     const grounded = !!hit;
 
     // 跳躍與重力
-    const speedGround = 15;
-    const speedAir = speedGround * 0.3;
-    const speed = grounded ? speedGround : speedAir;
+    const base = grounded ? WALK_SPEED : WALK_SPEED * AIR_MULT;
+    const speed = base * (sprinting ? SPRINT_MULT : 1);
 
     if (jumpRequested && grounded) {
-    velocityY = JUMP_SPEED;
-    jumpRequested = false;
+        velocityY = JUMP_SPEED;
+        jumpRequested = false;
     }
     velocityY -= GRAVITY * dt;
 
     // 期望位移 → KCC 修正
     const desired = {
-    x: moveDir.x * speed * dt,
-    y: velocityY * dt,
-    z: moveDir.z * speed * dt
+        x: moveDir.x * speed * dt,
+        y: velocityY * dt,
+        z: moveDir.z * speed * dt
     };
 
     controller.computeColliderMovement(playerCol, desired);
@@ -573,9 +638,9 @@ function animate() {
 
     // 套用到 kinematic 剛體
     playerRB.setNextKinematicTranslation({
-    x: pos.x + corrected.x,
-    y: pos.y + corrected.y,
-    z: pos.z + corrected.z
+        x: pos.x + corrected.x,
+        y: pos.y + corrected.y,
+        z: pos.z + corrected.z
     });
 
     // 物理步進（Rapier）
@@ -598,7 +663,32 @@ function animate() {
 
     // 右上角座標顯示
     if (coordsDiv) {
-    coordsDiv.innerText = `x:${p.x.toFixed(2)} y:${p.y.toFixed(2)} z:${p.z.toFixed(2)}`;
+        coordsDiv.innerText = `x:${p.x.toFixed(2)} y:${p.y.toFixed(2)} z:${p.z.toFixed(2)}`;
+    }
+
+    // === 平滑門動畫 & 碰撞器同步 ===
+    for (const entry of doorEntries) {
+        const { mesh, pivot, rb } = entry;
+
+        if (pivot.userData.animating) {
+            pivot.userData.animTime = Math.min(
+            pivot.userData.animTime + dt,
+            pivot.userData.animDuration
+            );
+            const t = pivot.userData.animTime / pivot.userData.animDuration;
+            const tt = easeInOut(t);                    // 平滑曲線
+            const angle = lerp(pivot.userData.animFrom, pivot.userData.animTo, tt);
+            pivot.rotation.y = angle;
+            if (t >= 1) pivot.userData.animating = false;
+        }
+
+        // 同步 kinematic 剛體到門板當前世界姿態
+        pivot.updateMatrixWorld(true);
+        mesh.updateWorldMatrix(true, true);
+        const pos = new THREE.Vector3(); mesh.getWorldPosition(pos);
+        const q   = new THREE.Quaternion(); mesh.getWorldQuaternion(q);
+        rb.setNextKinematicTranslation({ x: pos.x, y: pos.y, z: pos.z });
+        rb.setNextKinematicRotation({ x: q.x, y: q.y, z: q.z, w: q.w });
     }
 
     // 日夜循環
