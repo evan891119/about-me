@@ -35,6 +35,23 @@
       pointer-events: none;
       z-index: 5;
     }
+  /* 禁止整頁選取文字（含 canvas） */
+  html, body, canvas {
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+  }
+  /* 可選：也讓提示/遮罩不被選取 */
+  #blocker, #instructions, #coordsDiv {
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  /* 取消圖片拖拉（若頁面有 img） */
+  img {
+    -webkit-user-drag: none;
+    user-drag: none;
+  }
   </style>
   <!-- Import map for bare module specifier 'three' -->
   <script type="importmap">
