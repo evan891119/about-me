@@ -5,6 +5,7 @@ export class Input {
     this.forward = this.backward = this.left = this.right = false;
     this.sprinting = false;
     this.jump = false;
+    this.flashlightToggleRequested = false;
     this.controls = null;
   }
 
@@ -29,6 +30,7 @@ export class Input {
   }
 
   onKeyDown = (e) => {
+    if (e.repeat) return;
     switch (e.code) {
       case 'KeyW': case 'ArrowUp': this.forward = true; break;
       case 'KeyS': case 'ArrowDown': this.backward = true; break;
@@ -36,6 +38,7 @@ export class Input {
       case 'KeyD': case 'ArrowRight': this.right = true; break;
       case 'ShiftLeft': case 'ShiftRight': this.sprinting = true; break;
       case 'Space': this.jump = true; break;
+      case 'KeyE': this.flashlightToggleRequested = true; break;
     }
   }
 
@@ -47,5 +50,11 @@ export class Input {
       case 'KeyD': case 'ArrowRight': this.right = false; break;
       case 'ShiftLeft': case 'ShiftRight': this.sprinting = false; break;
     }
+  }
+
+  consumeFlashlightToggle() {
+    if (!this.flashlightToggleRequested) return false;
+    this.flashlightToggleRequested = false;
+    return true;
   }
 }

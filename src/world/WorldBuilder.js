@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { HOUSE_CONFIGS, HOUSE_LAYOUT } from '../content.js';
+import { PLAYER } from '../config.js';
 
 /**
  * 建立場景幾何（純視覺，不含 Rapier），回傳：
@@ -129,7 +130,9 @@ function createHouseVisual({
 
   // 尺寸
   const doorWidth = width * 0.4;
-  const doorHeight = height * 0.6;
+  // 門高至少要讓玩家膠囊體能通過（否則會卡在門框）
+  const minDoorHeight = PLAYER.height + 0.2;
+  const doorHeight = Math.max(height * 0.75, minDoorHeight);
   const doorThickness = 0.05;
 
   // 屋頂（四面）

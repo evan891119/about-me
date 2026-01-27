@@ -9,6 +9,7 @@ import { StaticColliderSystem } from './src/systems/StaticColliderSystem.js';
 import { DoorSystem } from './src/systems/DoorSystem.js';
 import { SkySystem } from './src/systems/SkySystem.js';
 import { InteractionSystem } from './src/systems/InteractionSystem.js';
+import { FlashlightSystem } from './src/systems/FlashlightSystem.js';
 import { PlayerController } from './src/player/PlayerController.js';
 import { buildWorld } from './src/world/WorldBuilder.js';
 import { HUD } from './src/ui/HUD.js';
@@ -59,6 +60,9 @@ async function init() {
   // Player（內部會建立 KCC 與 capsule collider）
   const player = new PlayerController(physics, app.camera, input);
 
+  // 手電筒（E 切換）
+  const flashlight = new FlashlightSystem(app.scene, app.camera, input);
+
   // 門系統
   const doorSystem = new DoorSystem(physics);
   if (typeof doorSystem.registerDoors === 'function') {
@@ -72,6 +76,7 @@ async function init() {
 
   // 更新序
   loop.add({ update: dt => player.update(dt) });
+  loop.add({ update: () => flashlight.update() });
   loop.add({ update: () => interaction.update() });
   loop.add({ update: dt => doorSystem.update(dt) });
   loop.add({ update: (dt) => sky.update(dt) });
