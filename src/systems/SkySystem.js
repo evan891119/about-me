@@ -69,7 +69,8 @@ export class SkySystem {
       this.moon.scale.set(20000, 20000, 1); // 先給個初值，update 會調
       scene.add(this.moon);
       // 先畫一次
-      this._drawMoonPhase( getMoonIllumination(new Date()).fraction );
+      const illum = getMoonIllumination(new Date());
+      this._drawMoonPhase(illum.fraction, illum.phase);
     }
 
     // Lights
@@ -79,6 +80,7 @@ export class SkySystem {
 
     this.dirLight = new THREE.DirectionalLight(0xffffff, 0.6);
     this.dirLight.position.set(-3, 10, -10);
+    this.dirLight.castShadow = true;
     scene.add(this.dirLight);
 
     // 路燈的基礎亮度記錄，夜晚用
@@ -133,8 +135,8 @@ export class SkySystem {
     this.moon.position.set(mx, my, mz);
     this.moon.visible = mp.altitude > 0;
 
-    const { fraction } = getMoonIllumination(now);
-    this._drawMoonPhase(fraction);
+    const illum = getMoonIllumination(now);
+    this._drawMoonPhase(illum.fraction, illum.phase);
 
     // 視角大小（放大幾倍讓看得見）
     const angularDiameter = 0.5 * Math.PI / 180;
@@ -151,26 +153,38 @@ export class SkySystem {
     }
   }
 
-  _drawMoonPhase(fraction) {
-    // fraction: 0（新月）→ 0.5（上/下弦）→ 1（滿月）
+  _drawMoonPhase(fraction, phase = 0) {
+    // fraction: 0（新月）→ 1（滿月）
+    // phase: 0~1（決定盈虧方向）
     const ctx = this.moonCtx;
     const size = 256, cx = size/2, cy = size/2, r = size/2;
+    const f = Math.min(1, Math.max(0, fraction));
+    const waxing = phase < 0.5;
 
     ctx.clearRect(0, 0, size, size);
 
-    const grad = ctx.createRadialGradient(cx, cy, r*0.5, cx, cy, r);
-    grad.addColorStop(0, 'rgba(255,255,220,1)');
-    grad.addColorStop(1, 'rgba(255,255,220,0)');
+    // 畫滿月的亮面底色
+    const grad = ctx.createRadialGradient(cx, cy, r * 0.2, cx, cy, r);
+    grad.addColorStop(0, 'rgba(255,255,240,1)');
+    grad.addColorStop(0.75, 'rgba(245,245,220,0.98)');
+    grad.addColorStop(1, 'rgba(215,215,200,0.92)');
     ctx.fillStyle = grad;
-    ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2); ctx.fill();
-
-    // 粗略月相：用橢圓遮罩來近似明暗分界
-    ctx.globalCompositeOperation = 'destination-out';
-    const offset = (fraction * 2 - 1) * r; // [-r, r]
     ctx.beginPath();
-    ctx.ellipse(cx + offset, cy, r, Math.max(0.0001, Math.abs(offset)), 0, 0, Math.PI * 2);
+    ctx.arc(cx, cy, r * 0.98, 0, Math.PI * 2);
     ctx.fill();
-    ctx.globalCompositeOperation = 'source-over';
+
+    // 用「重疊圓盤」畫出暗面，避免黑洞與錯誤的橢圓遮罩
+    // k 代表終止線偏移量（-1~1），用 fraction 近似即可
+    const k = Math.max(-1, Math.min(1, 1 - 2 * f));
+    const offset = (waxing ? 1 : -1) * k * r;
+
+    // 把暗面「挖成透明」，讓背景天空顯示出來
+    ctx.save();
+    ctx.globalCompositeOperation = 'destination-out';
+    ctx.beginPath();
+    ctx.arc(cx + offset, cy, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
 
     this.moonTexture.needsUpdate = true;
   }

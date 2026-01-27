@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { HOUSE_CONFIGS, HOUSE_LAYOUT } from '../content.js';
 
 /**
  * 建立場景幾何（純視覺，不含 Rapier），回傳：
@@ -58,18 +59,6 @@ export async function buildWorld(scene, options = {}) {
     scene.add(road);
   }
 
-  // === 基本打光（你也可以移到 SkySystem 外） ===
-  {
-    const hemi = new THREE.HemisphereLight(0xffffff, 0x444444, 0.7);
-    hemi.position.set(0, 20, 0);
-    scene.add(hemi);
-
-    const dir = new THREE.DirectionalLight(0xffffff, 0.6);
-    dir.position.set(-3, 10, -10);
-    dir.castShadow = true;
-    scene.add(dir);
-  }
-
   // === 路燈（兩側等距放置） ===
   for (let z = -roadLength / 2 + spacing / 2; z <= roadLength / 2 - spacing / 2; z += spacing) {
     for (const side of [-1, 1]) {
@@ -100,35 +89,22 @@ export async function buildWorld(scene, options = {}) {
     }
   }
 
-  // === 房子們（純 Mesh，門會回傳 {mesh, pivot}） ===
-  const houseOffset = 6;
-  const zPositions = [-15, 5];
-  const houseConfigs = [
-    {
-      position: new THREE.Vector3(-houseOffset, 0, zPositions[0]),
-      sign: { type: 'text', text: '歡迎來到我的3D世界', color: '#000000', backgroundColor: '#ffffff', font: '48px Arial' },
-      interior: { back: { type: 'image', src: 'images/photo1.png' } },
-    },
-    {
-      position: new THREE.Vector3(houseOffset, 0, zPositions[0]),
-      sign: { type: 'image', src: 'images/photo1.png' },
-      interior: { back: { type: 'text', text: '這是房子裡面的文字內容', color: '#000000', backgroundColor: '#ffffff', font: '24px sans-serif' } },
-    },
-    {
-      position: new THREE.Vector3(-houseOffset, 0, zPositions[1]),
-      sign: { type: 'image', src: 'images/photo1.png' },
-      interior: { back: { type: 'image', src: 'images/photo1.png' } },
-    },
-    {
-      position: new THREE.Vector3(houseOffset, 0, zPositions[1]),
-      sign: { type: 'text', text: '我是張正誠，熱愛程式設計', color: '#ffffff', backgroundColor: '#000000', font: '36px sans-serif' },
-      interior: {
-        back:  { type: 'text', text: '內部: 這裡是房子裡面', color: '#0000ff', backgroundColor: '#ffffff', font: '24px sans-serif' },
-        left:  { type: 'text', text: '內部: 這裡是房子左邊牆面', color: '#0000ff', backgroundColor: '#000000', font: '24px sans-serif' },
-        right: { type: 'text', text: '內部: 這裡是房子右邊牆面', color: '#ffffff', backgroundColor: '#000000', font: '24px sans-serif' },
-      },
-    },
-  ];
+  // === 房子們（內容由 content.js 提供） ===
+  const houseOffset = HOUSE_LAYOUT.houseOffset ?? 6;
+  const zPositions = HOUSE_LAYOUT.zPositions ?? [-15, 5];
+  const fallbackZ = zPositions[0] ?? 0;
+
+  const houseConfigs = HOUSE_CONFIGS.map((cfg) => {
+    const lane = cfg.lane ?? -1;
+    const row = cfg.row ?? 0;
+    const x = lane * houseOffset;
+    const z = zPositions[row] ?? fallbackZ;
+
+    return {
+      ...cfg,
+      position: new THREE.Vector3(x, 0, z),
+    };
+  });
 
   houseConfigs.forEach(cfg => {
     const { group, collidables, doorPair } = createHouseVisual(cfg);

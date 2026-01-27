@@ -11,6 +11,7 @@ import { SkySystem } from './src/systems/SkySystem.js';
 import { InteractionSystem } from './src/systems/InteractionSystem.js';
 import { PlayerController } from './src/player/PlayerController.js';
 import { buildWorld } from './src/world/WorldBuilder.js';
+import { HUD } from './src/ui/HUD.js';
 
 if (!WebGL.isWebGLAvailable()) {
   const warning = WebGL.getWebGLErrorMessage();
@@ -36,6 +37,9 @@ async function init() {
   input.attach(app.camera);
   // ★ 把 PointerLockControls 的 3D 物件加到場景（否則看不到相機的位置變化）
   app.scene.add(input.controls.getObject());
+
+  const hud = new HUD();
+  hud.init();
 
   // World（只產生 Mesh 與 metadata）
     const { collidableMeshes, doors, streetLights } = await buildWorld(app.scene, {
@@ -64,10 +68,11 @@ async function init() {
   }
 
   // 射線互動（點門）
-  new InteractionSystem(app.camera, player.rb, doorSystem, collidableMeshes);
+  const interaction = new InteractionSystem(app.camera, player.rb, doorSystem, collidableMeshes, hud);
 
   // 更新序
   loop.add({ update: dt => player.update(dt) });
+  loop.add({ update: () => interaction.update() });
   loop.add({ update: dt => doorSystem.update(dt) });
   loop.add({ update: (dt) => sky.update(dt) });
   loop.add({ update: ()  => physics.step() });

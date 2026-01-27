@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import RAPIER from 'https://cdn.skypack.dev/@dimforge/rapier3d-compat';
-import { PLAYER } from '../config.js';
+import { PHYSICS, PLAYER } from '../config.js';
 
 export class PlayerController {
   constructor(physics, camera, input) {
@@ -24,6 +24,8 @@ export class PlayerController {
     this._f = new THREE.Vector3();
     this._r = new THREE.Vector3();
     this._dir = new THREE.Vector3();
+    this._hv = new THREE.Vector3();
+    this._targetHv = new THREE.Vector3();
     this.vy = 0;
   }
 
@@ -51,13 +53,21 @@ export class PlayerController {
     if (this._dir.lengthSq() > 0) this._dir.normalize();
 
     const grounded = this._grounded();
-    const base = grounded ? PLAYER.walk : PLAYER.walk * PLAYER.airMult;
-    const speed = base * (this.input.sprinting ? PLAYER.sprintMult : 1);
+    const speed = PLAYER.walk * (this.input.sprinting ? PLAYER.sprintMult : 1);
+
+    // 保留起跳時的水平慣性，空中再用較弱的控制去調整方向
+    if (grounded) {
+      this._hv.copy(this._dir).multiplyScalar(speed);
+    } else {
+      this._targetHv.copy(this._dir).multiplyScalar(speed * PLAYER.airMult);
+      const blend = Math.min(1, PLAYER.airControl * dt);
+      this._hv.lerp(this._targetHv, blend);
+    }
 
     if (this.input.jump && grounded) { this.vy = PLAYER.jump; this.input.jump = false; }
-    this.vy -= 30 * dt;
+    this.vy += PHYSICS.gravity.y * dt;
 
-    const desired = { x: this._dir.x*speed*dt, y: this.vy*dt, z: this._dir.z*speed*dt };
+    const desired = { x: this._hv.x*dt, y: this.vy*dt, z: this._hv.z*dt };
     this.controller.computeColliderMovement(this.col, desired);
     const corr = this.controller.computedMovement();
     if (desired.y < 0 && corr.y > desired.y * 0.5) this.vy = 0;

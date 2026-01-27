@@ -1,14 +1,15 @@
 export const PHYSICS = {
-  gravity: { x: 0, y: -30, z: 0 },
+  gravity: { x: 0, y: -18, z: 0 },
 };
 
 export const PLAYER = {
-  height: 1.0,
-  radius: 0.3,
+  height: 1.7,
+  radius: 0.35,
   walk: 6,
   airMult: 0.35,
+  airControl: 6,
   sprintMult: 1.5,
-  jump: 10,
+  jump: 8,
 };
 
 export const WORLD = {
