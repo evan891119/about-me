@@ -1,6 +1,6 @@
-# about-me: 3D 個人展示 / 博物館
+# about-me: 3D 個人博物館
 
-這是一個用 Three.js + Rapier 做的第一人稱 3D 場景：
+這是一個用 Three.js + Rapier 做的第一人稱 3D 個人博物館：
 - WASD 移動，滑鼠旋轉視角，Space 跳躍
 - V 切換展示鏡頭（高機位斜俯視）
 - 點擊門可以開關
@@ -41,9 +41,8 @@ python3 -m http.server 4173
 
 請直接改：`src/content.js`
 
-- `HOUSE_LAYOUT`：控制房子排版（橫向偏移與每一列的 z 位置）
-- `HOUSE_CONFIGS`：每一棟房子的內容
-  - `lane`: -1（左側）或 1（右側）
-  - `row`: 第幾列（對應 `HOUSE_LAYOUT.zPositions`）
-  - `sign`: 外牆招牌
-  - `interior`: 內牆內容（back / left / right）
+- `MUSEUM_ZONES`：四展區內容（intro / skills / projects / contact）
+  - `quadrant`: `nw/ne/sw/se`
+  - `title`: 展區標題
+  - `sign`: 區塊主標
+  - `back/left/right`: 展牆文案

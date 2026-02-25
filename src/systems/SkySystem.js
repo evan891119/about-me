@@ -35,6 +35,7 @@ export class SkySystem {
     this._fogDay = new THREE.Color(VISUAL.fog.dayColor);
     this._fogDusk = new THREE.Color(VISUAL.fog.duskColor);
     this._fogNight = new THREE.Color(VISUAL.fog.nightColor);
+    this._fogNightLifted = new THREE.Color(VISUAL.fog.nightColor).lerp(new THREE.Color(0xffffff), VISUAL.night.fogNightLift);
 
     // 背景交給 Sky shader
     this.scene.background = null;
@@ -112,6 +113,7 @@ export class SkySystem {
     this.streetLights.forEach(l => {
       if (!l.userData) l.userData = {};
       if (l.userData.baseIntensity == null) l.userData.baseIntensity = (l.intensity ?? 1);
+      if (l.userData.baseDistance == null) l.userData.baseDistance = (l.distance ?? 20);
     });
 
     // 立即算一次
@@ -124,6 +126,7 @@ export class SkySystem {
     this.streetLights.forEach(l => {
       if (!l.userData) l.userData = {};
       if (l.userData.baseIntensity == null) l.userData.baseIntensity = (l.intensity ?? 1);
+      if (l.userData.baseDistance == null) l.userData.baseDistance = (l.distance ?? 20);
     });
   }
 
@@ -144,13 +147,13 @@ export class SkySystem {
 
     const sunHeight = Math.max(Math.sin(angle), 0); // 0~1
     const warmMix = 1 - Math.min(1, Math.abs(sunHeight - 0.32) / 0.32);
-    const sunIntensity = 0.12 + sunHeight * 0.88;
+    const sunIntensity = VISUAL.night.minSunIntensity + sunHeight * (1 - VISUAL.night.minSunIntensity);
 
     this.dirLight.intensity = sunIntensity;
     this._tmpWarmLight.lerpColors(this.dayLightColor, this.duskLightColor, warmMix);
     this.dirLight.color.lerpColors(this.nightLightColor, this._tmpWarmLight, sunHeight);
 
-    const hemiIntensity = 0.2 + sunHeight * 0.45;
+    const hemiIntensity = VISUAL.night.minHemiIntensity + sunHeight * 0.45;
     this.hemiLight.intensity = hemiIntensity;
     this._tmpWarmSky.lerpColors(this.daySkyColor, this.duskSkyColor, warmMix);
     this.hemiLight.color.lerpColors(this.nightSkyColor, this._tmpWarmSky, sunHeight);
@@ -181,11 +184,14 @@ export class SkySystem {
     if (this.streetLights?.length) {
       this.streetLights.forEach(light => {
         const base = light.userData?.baseIntensity ?? 1;
-        light.intensity = base * (1 - sunHeight) * 1.15;
+        const baseDistance = light.userData?.baseDistance ?? light.distance ?? 20;
+        const nightFactor = 1 - sunHeight;
+        light.intensity = base * nightFactor * VISUAL.night.streetLightNightBoost;
+        light.distance = baseDistance * (1 + nightFactor * (VISUAL.night.streetLightRangeBoost - 1));
       });
     }
 
-    this._tmpFogColor.copy(this._fogNight).lerp(this._fogDusk, warmMix).lerp(this._fogDay, sunHeight);
+    this._tmpFogColor.copy(this._fogNightLifted).lerp(this._fogDusk, warmMix).lerp(this._fogDay, sunHeight);
     this.scene.fog.color.copy(this._tmpFogColor);
   }
 

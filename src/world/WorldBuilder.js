@@ -1,6 +1,6 @@
 import * as THREE from 'three';
-import { HOUSE_CONFIGS, HOUSE_LAYOUT, PROP_LAYOUT } from '../content.js';
-import { PLAYER, VISUAL } from '../config.js';
+import { MUSEUM_ZONES, PROP_LAYOUT } from '../content.js';
+import { PLAYER, VISUAL, WORLD } from '../config.js';
 
 const sharedTextureLoader = new THREE.TextureLoader();
 const boxGeometryCache = new Map();
@@ -106,36 +106,17 @@ export async function buildWorld(scene, options = {}) {
       const light = new THREE.PointLight(0xffd9a8, baseIntensity, lightRange);
       light.position.copy(lamp.position);
       light.userData.baseIntensity = baseIntensity;  // 給 SkySystem 夜間用
+      light.userData.baseDistance = lightRange;
       scene.add(light);
       streetLights.push(light);
     }
   }
 
-  // === 房子們（內容由 content.js 提供） ===
-  const houseOffset = HOUSE_LAYOUT.houseOffset ?? 6;
-  const zPositions = HOUSE_LAYOUT.zPositions ?? [-15, 5];
-  const fallbackZ = zPositions[0] ?? 0;
-
-  const houseConfigs = HOUSE_CONFIGS.map((cfg) => {
-    const lane = cfg.lane ?? -1;
-    const row = cfg.row ?? 0;
-    const x = lane * houseOffset;
-    const z = zPositions[row] ?? fallbackZ;
-
-    return {
-      ...cfg,
-      position: new THREE.Vector3(x, 0, z),
-    };
-  });
-
-  houseConfigs.forEach(cfg => {
-    const { group, collidables, doorPair } = createHouseVisual(cfg, { textureLoader: sharedTextureLoader });
-    group.position.copy(cfg.position);
-    scene.add(group);
-
-    collidableMeshes.push(...collidables);
-    if (doorPair) doors.push(doorPair);
-  });
+  // === 單一大型博物館 ===
+  const museum = createMuseumVisual();
+  scene.add(museum.group);
+  collidableMeshes.push(...museum.collidables);
+  doors.push(...museum.doors);
 
   if (VISUAL.propsDensity.enabled) {
     const propGroup = buildPropClusters(roadWidth);
@@ -145,206 +126,276 @@ export async function buildWorld(scene, options = {}) {
   return { collidableMeshes, doors, streetLights };
 }
 
-/** 純視覺版房子，包含門的 userData（isDoor/doorPivot） */
-function createHouseVisual({
-  width = 4, height = 2.5, depth = 8,
-  wallColor = 0xFFFFFF, roofColor = 0x882200,
-  sign = null, interior = null
-} = {}, { textureLoader = sharedTextureLoader } = {}) {
+function createMuseumVisual() {
   const group = new THREE.Group();
   const collidables = [];
-
-  // 尺寸
-  const doorWidth = width * 0.4;
-  // 門高至少要讓玩家膠囊體能通過（否則會卡在門框）
+  const doors = [];
+  const museumCfg = WORLD.museum ?? {};
+  const width = museumCfg.width ?? 34;
+  const depth = museumCfg.depth ?? 52;
+  const height = museumCfg.height ?? 9;
+  const wallThickness = museumCfg.wallThickness ?? 0.28;
+  const entranceWidth = museumCfg.entranceWidth ?? 4.8;
   const minDoorHeight = PLAYER.height + 0.2;
-  const doorHeight = Math.max(height * 0.75, minDoorHeight);
-  const doorThickness = 0.05;
+  const entranceHeight = Math.max(museumCfg.entranceHeight ?? 3.4, minDoorHeight);
+  const corridorWidth = museumCfg.corridorWidth ?? 5.4;
+  const zonePadding = museumCfg.zonePadding ?? 2.2;
 
-  // 屋頂（四面）
-  {
-    const roofHeight = height * 0.6;
-    const apexY = height + roofHeight;
-    const halfW = width / 2;
-    const halfD = depth / 2;
-    const vertices = new Float32Array([
-      // front
-      0, apexY, 0,   halfW, height, -halfD,   -halfW, height, -halfD,
-      // right
-      0, apexY, 0,   halfW, height,  halfD,    halfW, height, -halfD,
-      // back
-      0, apexY, 0,   -halfW, height, halfD,    halfW, height,  halfD,
-      // left
-      0, apexY, 0,   -halfW, height, -halfD,  -halfW, height,  halfD,
-    ]);
-    const roofGeo = new THREE.BufferGeometry();
-    roofGeo.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
-    roofGeo.computeVertexNormals();
-    const roofMat = new THREE.MeshStandardMaterial({
-      color: roofColor,
-      side: THREE.DoubleSide,
-      roughness: VISUAL.materials.roofRoughness,
-      metalness: VISUAL.materials.roofMetalness,
-    });
-    const roof = new THREE.Mesh(roofGeo, roofMat);
-    roof.castShadow = roof.receiveShadow = true;
-    group.add(roof);
-    collidables.push(roof);
-  }
-
-  const panelMat = new THREE.MeshStandardMaterial({
-    color: wallColor,
+  const wallMat = new THREE.MeshStandardMaterial({
+    color: 0xe7e2d6,
     roughness: VISUAL.materials.wallRoughness,
     metalness: VISUAL.materials.wallMetalness,
   });
+  const trimMat = new THREE.MeshStandardMaterial({
+    color: 0xc9c2b4,
+    roughness: 0.78,
+    metalness: 0.06,
+  });
+  const glassMat = new THREE.MeshStandardMaterial({
+    color: 0xd9f0ff,
+    roughness: 0.12,
+    metalness: 0.08,
+    transparent: true,
+    opacity: 0.35,
+  });
 
-  // 前牆（左右 + 上方招牌）
-  {
-    const panelThickness = doorThickness;
-    const leftPanelWidth = (width - doorWidth) / 2;
+  const roof = new THREE.Mesh(getBoxGeometry(width, wallThickness, depth), trimMat);
+  roof.position.set(0, height + wallThickness / 2, 0);
+  roof.castShadow = roof.receiveShadow = true;
+  group.add(roof);
+  collidables.push(roof);
 
-    const leftPanel = new THREE.Mesh(
-      getBoxGeometry(leftPanelWidth, height, panelThickness),
-      panelMat
-    );
-    leftPanel.position.set(-doorWidth/2 - leftPanelWidth/2, height/2, depth/2 - panelThickness/2);
-    leftPanel.castShadow = leftPanel.receiveShadow = true;
-    group.add(leftPanel);
-    collidables.push(leftPanel);
+  const backWall = new THREE.Mesh(getBoxGeometry(width, height, wallThickness), wallMat);
+  backWall.position.set(0, height / 2, -depth / 2 + wallThickness / 2);
+  backWall.castShadow = backWall.receiveShadow = true;
+  group.add(backWall);
+  collidables.push(backWall);
 
-    const rightPanel = new THREE.Mesh(
-      getBoxGeometry(leftPanelWidth, height, panelThickness),
-      panelMat
-    );
-    rightPanel.position.set(doorWidth/2 + leftPanelWidth/2, height/2, depth/2 - panelThickness/2);
-    rightPanel.castShadow = rightPanel.receiveShadow = true;
-    group.add(rightPanel);
-    collidables.push(rightPanel);
+  const leftWall = new THREE.Mesh(getBoxGeometry(wallThickness, height, depth), wallMat);
+  leftWall.position.set(-width / 2 + wallThickness / 2, height / 2, 0);
+  leftWall.castShadow = leftWall.receiveShadow = true;
+  group.add(leftWall);
+  collidables.push(leftWall);
 
-    const headerHeight = height - doorHeight;
-    const headerGeo = getBoxGeometry(doorWidth, headerHeight, panelThickness);
-    let headerPanel;
-    if (sign) {
-      let tex;
-      if (sign.type === 'text') {
-        const c = document.createElement('canvas'); c.width = 512; c.height = 256;
-        const ctx = c.getContext('2d');
-        ctx.fillStyle = sign.backgroundColor || '#ffffff'; ctx.fillRect(0,0,c.width,c.height);
-        ctx.fillStyle = sign.color || '#000000';
-        ctx.font = sign.font || '48px sans-serif';
-        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-        ctx.fillText(sign.text, c.width/2, c.height/2);
-        tex = new THREE.CanvasTexture(c); tex.needsUpdate = true;
-      } else if (sign.type === 'image') {
-        tex = textureLoader.load(sign.src);
-      }
-      const blank = panelMat;
-      const signMat = new THREE.MeshStandardMaterial({
-        map: tex,
-        side: THREE.FrontSide,
-        roughness: 0.8,
-        metalness: 0.02,
-      });
-      const mats = [blank, blank, blank, blank, signMat, blank];
-      headerPanel = new THREE.Mesh(headerGeo, mats);
-    } else {
-      headerPanel = new THREE.Mesh(headerGeo, panelMat);
+  const rightWall = new THREE.Mesh(getBoxGeometry(wallThickness, height, depth), wallMat);
+  rightWall.position.set(width / 2 - wallThickness / 2, height / 2, 0);
+  rightWall.castShadow = rightWall.receiveShadow = true;
+  group.add(rightWall);
+  collidables.push(rightWall);
+
+  const frontPanelW = (width - entranceWidth) / 2;
+  const frontLeft = new THREE.Mesh(getBoxGeometry(frontPanelW, height, wallThickness), wallMat);
+  frontLeft.position.set(-entranceWidth / 2 - frontPanelW / 2, height / 2, depth / 2 - wallThickness / 2);
+  frontLeft.castShadow = frontLeft.receiveShadow = true;
+  group.add(frontLeft);
+  collidables.push(frontLeft);
+
+  const frontRight = new THREE.Mesh(getBoxGeometry(frontPanelW, height, wallThickness), wallMat);
+  frontRight.position.set(entranceWidth / 2 + frontPanelW / 2, height / 2, depth / 2 - wallThickness / 2);
+  frontRight.castShadow = frontRight.receiveShadow = true;
+  group.add(frontRight);
+  collidables.push(frontRight);
+
+  const frontHeaderH = Math.max(0.2, height - entranceHeight);
+  const frontHeader = new THREE.Mesh(getBoxGeometry(entranceWidth, frontHeaderH, wallThickness), trimMat);
+  frontHeader.position.set(0, entranceHeight + frontHeaderH / 2, depth / 2 - wallThickness / 2);
+  frontHeader.castShadow = frontHeader.receiveShadow = true;
+  group.add(frontHeader);
+  collidables.push(frontHeader);
+
+  const glassPaneLeft = new THREE.Mesh(getBoxGeometry(frontPanelW * 0.86, height * 0.8, wallThickness * 0.35), glassMat);
+  glassPaneLeft.position.set(-entranceWidth / 2 - frontPanelW / 2, height * 0.52, depth / 2 - wallThickness * 0.7);
+  group.add(glassPaneLeft);
+  const glassPaneRight = new THREE.Mesh(getBoxGeometry(frontPanelW * 0.86, height * 0.8, wallThickness * 0.35), glassMat);
+  glassPaneRight.position.set(entranceWidth / 2 + frontPanelW / 2, height * 0.52, depth / 2 - wallThickness * 0.7);
+  group.add(glassPaneRight);
+
+  const entranceDoor = createDoorAssembly({
+    width: entranceWidth,
+    height: entranceHeight,
+    thickness: wallThickness * 0.8,
+    color: 0x88a7b2,
+  });
+  entranceDoor.pivot.position.set(-entranceWidth / 2, 0, depth / 2 - wallThickness);
+  entranceDoor.pivot.userData.openRotation = -Math.PI / 2.2;
+  group.add(entranceDoor.pivot);
+  collidables.push(entranceDoor.mesh);
+  doors.push(entranceDoor);
+
+  const verticalPart = (depth - corridorWidth) / 2;
+  const dividerVTop = new THREE.Mesh(getBoxGeometry(wallThickness, height * 0.72, verticalPart), trimMat);
+  dividerVTop.position.set(0, (height * 0.72) / 2, -corridorWidth / 2 - verticalPart / 2);
+  dividerVTop.castShadow = dividerVTop.receiveShadow = true;
+  group.add(dividerVTop);
+  collidables.push(dividerVTop);
+
+  const dividerVBottom = new THREE.Mesh(getBoxGeometry(wallThickness, height * 0.72, verticalPart), trimMat);
+  dividerVBottom.position.set(0, (height * 0.72) / 2, corridorWidth / 2 + verticalPart / 2);
+  dividerVBottom.castShadow = dividerVBottom.receiveShadow = true;
+  group.add(dividerVBottom);
+  collidables.push(dividerVBottom);
+
+  const horizontalPart = (width - corridorWidth) / 2;
+  const dividerHLeft = new THREE.Mesh(getBoxGeometry(horizontalPart, height * 0.72, wallThickness), trimMat);
+  dividerHLeft.position.set(-corridorWidth / 2 - horizontalPart / 2, (height * 0.72) / 2, 0);
+  dividerHLeft.castShadow = dividerHLeft.receiveShadow = true;
+  group.add(dividerHLeft);
+  collidables.push(dividerHLeft);
+
+  const dividerHRight = new THREE.Mesh(getBoxGeometry(horizontalPart, height * 0.72, wallThickness), trimMat);
+  dividerHRight.position.set(corridorWidth / 2 + horizontalPart / 2, (height * 0.72) / 2, 0);
+  dividerHRight.castShadow = dividerHRight.receiveShadow = true;
+  group.add(dividerHRight);
+  collidables.push(dividerHRight);
+
+  const zoneDefs = [
+    { q: 'nw', x: -1, z: -1 },
+    { q: 'ne', x:  1, z: -1 },
+    { q: 'sw', x: -1, z:  1 },
+    { q: 'se', x:  1, z:  1 },
+  ];
+  const zoneCenterX = corridorWidth / 2 + (horizontalPart / 2);
+  const zoneCenterZ = corridorWidth / 2 + (verticalPart / 2);
+  const zonePanelW = Math.max(2.6, horizontalPart - zonePadding * 2);
+  const zonePanelH = 2.3;
+  const zonePanelD = 0.08;
+
+  const zoneLight = new THREE.PointLight(0xfff0d8, VISUAL.museumInterior.zoneLightIntensity, VISUAL.museumInterior.zoneLightRange);
+  zoneDefs.forEach((d) => {
+    const zone = MUSEUM_ZONES.find((z) => z.quadrant === d.q);
+    if (!zone) return;
+    const cx = d.x * zoneCenterX;
+    const cz = d.z * zoneCenterZ;
+    const zoneGroup = createZoneDisplay(zone, zonePanelW, zonePanelH, zonePanelD);
+    zoneGroup.position.set(cx, 0, cz);
+    group.add(zoneGroup);
+
+    const pl = zoneLight.clone();
+    pl.position.set(cx, 3.2, cz);
+    group.add(pl);
+  });
+
+  const hallFill = new THREE.HemisphereLight(0xfff7eb, 0x5b5f69, VISUAL.museumInterior.baseFillIntensity);
+  hallFill.position.set(0, height - 1, 0);
+  group.add(hallFill);
+
+  return { group, collidables, doors };
+}
+
+function createZoneDisplay(zone, panelWidth, panelHeight, panelDepth) {
+  const g = new THREE.Group();
+  const panelMat = new THREE.MeshStandardMaterial({ color: 0xf2ede3, roughness: 0.86, metalness: 0.02 });
+  const frameMat = new THREE.MeshStandardMaterial({ color: 0xa98a62, roughness: 0.8, metalness: 0.05 });
+
+  const titleBoard = createTextBoard(zone.title ?? zone.id, panelWidth * 0.78, 0.8, 512, 160, '#1f1e1d', '#efe7d5');
+  titleBoard.position.set(0, 2.7, -panelWidth * 0.22);
+  g.add(titleBoard);
+
+  const signBoard = createTextBoard(zone.sign ?? '', panelWidth * 0.96, 0.9, 768, 180, '#111111', '#ffffff');
+  signBoard.position.set(0, 1.9, -panelWidth * 0.22);
+  g.add(signBoard);
+
+  const backPanel = new THREE.Mesh(getBoxGeometry(panelWidth, panelHeight, panelDepth), panelMat);
+  backPanel.position.set(0, 1.25, -panelWidth * 0.22 - 0.22);
+  backPanel.rotation.y = Math.PI;
+  backPanel.castShadow = backPanel.receiveShadow = true;
+  g.add(backPanel);
+  const backText = createTextBoard(zone.back ?? '', panelWidth * 0.9, panelHeight * 0.78, 768, 360, '#252423', '#f9f6ef');
+  backText.position.set(0, 1.25, -panelWidth * 0.22 - 0.14);
+  backText.rotation.y = Math.PI;
+  g.add(backText);
+
+  const leftPanel = new THREE.Mesh(getBoxGeometry(panelWidth * 0.56, panelHeight * 0.72, panelDepth), frameMat);
+  leftPanel.position.set(-panelWidth * 0.26, 1.05, panelWidth * 0.2);
+  leftPanel.rotation.y = Math.PI / 2;
+  leftPanel.castShadow = leftPanel.receiveShadow = true;
+  g.add(leftPanel);
+  const leftText = createTextBoard(zone.left ?? '', panelWidth * 0.5, panelHeight * 0.58, 512, 300, '#1d1d1d', '#f8f3e8');
+  leftText.position.set(-panelWidth * 0.2, 1.05, panelWidth * 0.2);
+  leftText.rotation.y = Math.PI / 2;
+  g.add(leftText);
+
+  const rightPanel = new THREE.Mesh(getBoxGeometry(panelWidth * 0.56, panelHeight * 0.72, panelDepth), frameMat);
+  rightPanel.position.set(panelWidth * 0.26, 1.05, panelWidth * 0.2);
+  rightPanel.rotation.y = -Math.PI / 2;
+  rightPanel.castShadow = rightPanel.receiveShadow = true;
+  g.add(rightPanel);
+  const rightText = createTextBoard(zone.right ?? '', panelWidth * 0.5, panelHeight * 0.58, 512, 300, '#1d1d1d', '#f8f3e8');
+  rightText.position.set(panelWidth * 0.2, 1.05, panelWidth * 0.2);
+  rightText.rotation.y = -Math.PI / 2;
+  g.add(rightText);
+
+  return g;
+}
+
+function createTextBoard(text, width, height, canvasW, canvasH, fg = '#111111', bg = '#ffffff') {
+  const c = document.createElement('canvas');
+  c.width = canvasW;
+  c.height = canvasH;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, canvasW, canvasH);
+  ctx.fillStyle = fg;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  const lines = wrapText(ctx, text, Math.floor(canvasW * 0.86), Math.floor(canvasH * 0.16), Math.floor(canvasH * 0.16));
+  const totalH = lines.length * Math.floor(canvasH * 0.16);
+  const startY = (canvasH - totalH) / 2 + Math.floor(canvasH * 0.08);
+  lines.forEach((line, i) => {
+    ctx.font = `${Math.floor(canvasH * 0.14)}px sans-serif`;
+    ctx.fillText(line, canvasW / 2, startY + i * Math.floor(canvasH * 0.16));
+  });
+  const tex = new THREE.CanvasTexture(c);
+  tex.needsUpdate = true;
+  const mat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.86, metalness: 0.02 });
+  const mesh = new THREE.Mesh(getBoxGeometry(width, height, 0.04), mat);
+  mesh.castShadow = mesh.receiveShadow = true;
+  return mesh;
+}
+
+function wrapText(ctx, text, maxW, fontPx) {
+  ctx.font = `${fontPx}px sans-serif`;
+  const raw = `${text}`.trim();
+  if (!raw) return [''];
+  const hasSpaces = /\s/.test(raw);
+  const words = hasSpaces ? raw.split(/\s+/).filter(Boolean) : Array.from(raw);
+  const lines = [];
+  if (!words.length) return [''];
+  let current = words[0];
+  for (let i = 1; i < words.length; i++) {
+    const candidate = hasSpaces ? `${current} ${words[i]}` : `${current}${words[i]}`;
+    if (ctx.measureText(candidate).width <= maxW) current = candidate;
+    else {
+      lines.push(current);
+      current = words[i];
     }
-    headerPanel.position.set(0, doorHeight + headerHeight/2, depth/2 - panelThickness/2);
-    headerPanel.castShadow = headerPanel.receiveShadow = true;
-    group.add(headerPanel);
-    collidables.push(headerPanel);
   }
-
-  // 後牆
-  {
-    const panelThickness = doorThickness;
-    const backGeo = getBoxGeometry(width, height, panelThickness);
-    let backPanel;
-    if (interior?.back) {
-      let tex;
-      if (interior.back.type === 'text') {
-        const c = document.createElement('canvas'); c.width = 512; c.height = 256;
-        const ctx = c.getContext('2d');
-        ctx.fillStyle = interior.back.backgroundColor || '#ffffff'; ctx.fillRect(0,0,c.width,c.height);
-        ctx.fillStyle = interior.back.color || '#000000';
-        ctx.font = interior.back.font || '48px sans-serif';
-        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-        ctx.fillText(interior.back.text, c.width/2, c.height/2);
-        tex = new THREE.CanvasTexture(c); tex.needsUpdate = true;
-      } else if (interior.back.type === 'image') {
-        tex = textureLoader.load(interior.back.src);
-      }
-      const blank = panelMat;
-      const interiorMat = new THREE.MeshStandardMaterial({
-        map: tex,
-        side: THREE.FrontSide,
-        roughness: 0.82,
-        metalness: 0.02,
-      });
-      const mats = [blank, blank, blank, blank, interiorMat, blank];
-      backPanel = new THREE.Mesh(backGeo, mats);
-    } else {
-      backPanel = new THREE.Mesh(backGeo, panelMat);
-    }
-    backPanel.position.set(0, height/2, -depth/2 + panelThickness/2);
-    backPanel.castShadow = backPanel.receiveShadow = true;
-    group.add(backPanel);
-    collidables.push(backPanel);
+  lines.push(current);
+  if (lines.length > 4) {
+    return hasSpaces
+      ? [lines.slice(0, 2).join(' '), lines.slice(2).join(' ')]
+      : [lines.slice(0, 2).join(''), lines.slice(2).join('')];
   }
+  return lines;
+}
 
-  // 左右側牆
-  {
-    const panelThickness = doorThickness;
+function createDoorAssembly({ width, height, thickness, color = 0x7f5430 }) {
+  const pivot = new THREE.Object3D();
+  const doorMesh = new THREE.Mesh(
+    getBoxGeometry(width, height, thickness),
+    new THREE.MeshStandardMaterial({ color, roughness: 0.55, metalness: 0.04, transparent: true, opacity: 0.65 })
+  );
+  doorMesh.position.set(width / 2, height / 2, thickness / 2);
+  doorMesh.castShadow = doorMesh.receiveShadow = true;
+  pivot.add(doorMesh);
 
-    const leftSide = new THREE.Mesh(
-      getBoxGeometry(panelThickness, height, depth),
-      panelMat
-    );
-    leftSide.position.set(-width/2 + panelThickness/2, height/2, 0);
-    leftSide.castShadow = leftSide.receiveShadow = true;
-    group.add(leftSide);
-    collidables.push(leftSide);
+  doorMesh.userData.isDoor = true;
+  doorMesh.userData.doorPivot = pivot;
+  pivot.userData.isOpen = false;
+  pivot.userData.closedRotation = 0;
+  pivot.userData.openRotation = -Math.PI / 2;
 
-    const rightSide = new THREE.Mesh(
-      getBoxGeometry(panelThickness, height, depth),
-      panelMat
-    );
-    rightSide.position.set(width/2 - panelThickness/2, height/2, 0);
-    rightSide.castShadow = rightSide.receiveShadow = true;
-    group.add(rightSide);
-    collidables.push(rightSide);
-  }
-
-  // 門（pivot + mesh + userData）
-  let doorPair = null;
-  {
-    const doorPivot = new THREE.Object3D();
-    doorPivot.position.set(-doorWidth/2, 0, depth/2);
-    group.add(doorPivot);
-
-    const doorGeo = getBoxGeometry(doorWidth, doorHeight, doorThickness);
-    const doorMat = new THREE.MeshStandardMaterial({
-      color: VISUAL.materials.doorColor,
-      roughness: 0.78,
-      metalness: 0.04,
-    });
-    const doorMesh = new THREE.Mesh(doorGeo, doorMat);
-    doorMesh.position.set(doorWidth/2, doorHeight/2, doorThickness/2);
-    doorMesh.castShadow = doorMesh.receiveShadow = true;
-    doorPivot.add(doorMesh);
-
-    doorMesh.userData.isDoor = true;
-    doorMesh.userData.doorPivot = doorPivot;
-    doorPivot.userData.isOpen = false;
-    doorPivot.userData.closedRotation = 0;
-    doorPivot.userData.openRotation = -Math.PI / 2;
-
-    collidables.push(doorMesh);
-    doorPair = { mesh: doorMesh, pivot: doorPivot };
-  }
-
-  return { group, collidables, doorPair };
+  return { mesh: doorMesh, pivot };
 }
 
 function buildPropClusters(roadWidth) {

@@ -20,6 +20,16 @@ export const WORLD = {
   roadWidth: 6,
   roadLength: 200,
   roadThickness: 0.02,
+  museum: {
+    width: 34,
+    depth: 52,
+    height: 9,
+    wallThickness: 0.28,
+    entranceWidth: 4.8,
+    entranceHeight: 3.4,
+    zonePadding: 2.2,
+    corridorWidth: 5.4,
+  },
 };
 
 export const INTERACTION = {
@@ -63,6 +73,19 @@ export const VISUAL = {
     showcaseFov: 62,
     showcasePosition: { x: 0, y: 14, z: 22 },
     showcaseLookAt: { x: 0, y: 1.2, z: -4 },
+  },
+  night: {
+    minSunIntensity: 0.18,
+    minHemiIntensity: 0.34,
+    fogNightLift: 0.2,
+    streetLightNightBoost: 1.55,
+    streetLightRangeBoost: 1.35,
+    flashlightFillBoost: 1.2,
+  },
+  museumInterior: {
+    baseFillIntensity: 0.32,
+    zoneLightIntensity: 0.42,
+    zoneLightRange: 12,
   },
   materials: {
     ground: { color: 0x8f8d66, roughness: 0.92, metalness: 0.02 },

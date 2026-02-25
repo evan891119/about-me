@@ -12,7 +12,15 @@ export class FlashlightSystem {
     this._camDir = new THREE.Vector3();
 
     const isLowQuality = VISUAL.postFX.quality === 'low';
-    this.light = new THREE.SpotLight(0xfff0d0, 1.9, 46, Math.PI / 6.8, 0.55, 1.35);
+    const fillBoost = VISUAL.night.flashlightFillBoost ?? 1.0;
+    this.light = new THREE.SpotLight(
+      0xfff0d0,
+      1.9 * fillBoost,
+      46 * Math.min(fillBoost, 1.25),
+      Math.PI / 6.1,
+      0.52,
+      1.25
+    );
     this.light.castShadow = true;
     this.light.shadow.mapSize.set(isLowQuality ? 256 : 512, isLowQuality ? 256 : 512);
     this.light.shadow.bias = -0.0002;

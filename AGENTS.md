@@ -71,9 +71,11 @@ python3 -m http.server 4173
 ## 7) 常見任務指引
 
 - 新增或調整展區內容：`src/content.js` 的 `HOUSE_LAYOUT`、`HOUSE_CONFIGS`
+- 博物館展區內容（主流程）：`src/content.js` 的 `MUSEUM_ZONES`
 - 調整移動手感：`src/config.js` 的 `PLAYER`、`PHYSICS`
 - 調整門互動距離或動畫速度：`src/config.js` 的 `INTERACTION` 與 `DoorSystem`
 - 調整天空與夜間燈光：`src/systems/SkySystem.js` 及 `buildWorld()` 內路燈參數
+- 夜晚太暗時，優先調 `src/config.js` 的 `VISUAL.night`（避免直接硬改系統常數）
 - 調整整體視覺風格與色調：`src/config.js` 的 `VISUAL`
 - 調整 Bloom/後處理表現：`src/systems/PostFXSystem.js` 與 `VISUAL.postFX`
 - 調整日夜色腳本與霧層：`src/systems/SkySystem.js` 與 `VISUAL.fog`
