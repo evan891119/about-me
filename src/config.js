@@ -30,3 +30,35 @@ export const INTERACTION = {
 export const SKY = {
   updateIntervalSec: 0.5,
 };
+
+export const VISUAL = {
+  pixelRatioMax: 1.5,
+  toneMappingExposure: 1.05,
+  fog: {
+    dayColor: 0xd8c7a8,
+    duskColor: 0xc08b68,
+    nightColor: 0x182336,
+    near: 18,
+    far: 140,
+  },
+  shadows: {
+    mapSize: 1024,
+    bias: -0.00015,
+  },
+  postFX: {
+    enabled: true,
+    quality: 'med',
+    bloomStrength: 0.22,
+    bloomRadius: 0.35,
+    bloomThreshold: 0.78,
+  },
+  materials: {
+    ground: { color: 0x8f8d66, roughness: 0.92, metalness: 0.02 },
+    road: { color: 0x646056, roughness: 0.9, metalness: 0.03 },
+    wallRoughness: 0.85,
+    wallMetalness: 0.02,
+    roofRoughness: 0.8,
+    roofMetalness: 0.03,
+    doorColor: 0x7f5430,
+  },
+};

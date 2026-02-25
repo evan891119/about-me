@@ -5,6 +5,14 @@
 這是一個以 `Three.js + Rapier` 建立的第一人稱 3D 個人展示/博物館專案。  
 型態是純前端 `ES Modules`，使用靜態伺服器啟動，不使用打包器。
 
+## 1.5) 視覺方向
+
+目前視覺目標為：
+
+`Stylized Low-Poly + Diorama + Cinematic Warm Lighting`
+
+最終美術規格與驗收標準請以 `docs/ART_DIRECTION.md` 為準。
+
 ## 2) 快速啟動
 
 請在專案根目錄執行：
@@ -35,8 +43,9 @@ python3 -m http.server 4173
 - 玩家控制：`src/player/PlayerController.js`
 - 世界生成：`src/world/WorldBuilder.js`
 - 互動系統：`src/systems/InteractionSystem.js`, `src/systems/DoorSystem.js`, `src/systems/SkySystem.js`, `src/systems/FlashlightSystem.js`
+- 後處理：`src/systems/PostFXSystem.js`
 - 內容資料：`src/content.js`
-- 參數集中設定：`src/config.js`
+- 參數集中設定：`src/config.js`（含 `VISUAL` 視覺參數）
 
 變更前請先讀 `main.js` 的初始化與 update 順序，再改子模組。
 
@@ -46,6 +55,8 @@ python3 -m http.server 4173
 2. 互動或幾何行為再改 `src/world/WorldBuilder.js` 與 `src/systems/*`。
 3. 移動/跳躍/互動距離/動畫時間等數值，優先放在 `src/config.js`，避免魔法數字散落。
 4. 優先小步修改，避免一次跨多個子系統大改。
+5. 視覺風格調整優先改 `src/config.js` 的 `VISUAL`，避免在系統內硬編碼。
+6. 視覺調整建議順序：先光照/霧/PostFX，再調材質參數。
 
 ## 6) 不可破壞約束
 
@@ -53,6 +64,9 @@ python3 -m http.server 4173
 - 不可中斷 `InteractionSystem` -> `DoorSystem` 的點門互動鏈。
 - 不可任意更改玩家膠囊尺寸與門高邏輯（`PlayerController` / `WorldBuilder`）而不重新驗證通行性。
 - 若需調整 `main.js` 的 loop update 順序，必須在回報中說明原因與影響。
+- 不可隨意移除或繞過 `PostFXSystem` 渲染鏈；若需停用，必須同步更新說明與驗收基準。
+- 視覺修改不可與 `docs/ART_DIRECTION.md` 的目標與驗收標準衝突。
+- 不可為追求畫面效果而破壞「最小驗收清單」的互動與通行性。
 
 ## 7) 常見任務指引
 
@@ -60,6 +74,9 @@ python3 -m http.server 4173
 - 調整移動手感：`src/config.js` 的 `PLAYER`、`PHYSICS`
 - 調整門互動距離或動畫速度：`src/config.js` 的 `INTERACTION` 與 `DoorSystem`
 - 調整天空與夜間燈光：`src/systems/SkySystem.js` 及 `buildWorld()` 內路燈參數
+- 調整整體視覺風格與色調：`src/config.js` 的 `VISUAL`
+- 調整 Bloom/後處理表現：`src/systems/PostFXSystem.js` 與 `VISUAL.postFX`
+- 調整日夜色腳本與霧層：`src/systems/SkySystem.js` 與 `VISUAL.fog`
 
 ## 8) 代理工作流程
 
@@ -78,3 +95,5 @@ python3 -m http.server 4173
 2. 瀏覽器 console 無明顯錯誤。
 3. 核心互動（移動、開門、手電筒、日夜）可操作。
 4. 沒有明顯未使用程式碼或錯誤匯入。
+5. Bloom 不影響 HUD/提示文字可讀性。
+6. 白天、黃昏、夜晚三種時段畫面都可視且風格一致。

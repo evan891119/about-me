@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { HOUSE_CONFIGS, HOUSE_LAYOUT } from '../content.js';
-import { PLAYER } from '../config.js';
+import { PLAYER, VISUAL } from '../config.js';
 
 const sharedTextureLoader = new THREE.TextureLoader();
 const boxGeometryCache = new Map();
@@ -55,7 +55,12 @@ export async function buildWorld(scene, options = {}) {
       t.repeat.set(groundRepeat, groundRepeat);
       t.anisotropy = maxAnisotropy;              // 直接設，Renderer 會自動 clamp
     });
-    const mat = new THREE.MeshStandardMaterial({ map: tex });
+    const mat = new THREE.MeshStandardMaterial({
+      map: tex,
+      color: VISUAL.materials.ground.color,
+      roughness: VISUAL.materials.ground.roughness,
+      metalness: VISUAL.materials.ground.metalness,
+    });
     const floor = new THREE.Mesh(geo, mat);
     floor.rotation.x = -Math.PI / 2;
     floor.receiveShadow = true;
@@ -65,7 +70,11 @@ export async function buildWorld(scene, options = {}) {
   // === 道路 ===
   {
     const geo = new THREE.PlaneGeometry(roadWidth, roadLength);
-    const mat = new THREE.MeshStandardMaterial({ color: 0x333333 });
+    const mat = new THREE.MeshStandardMaterial({
+      color: VISUAL.materials.road.color,
+      roughness: VISUAL.materials.road.roughness,
+      metalness: VISUAL.materials.road.metalness,
+    });
     const road = new THREE.Mesh(geo, mat);
     road.rotation.x = -Math.PI / 2;
     road.position.y = 0.01;
@@ -75,9 +84,9 @@ export async function buildWorld(scene, options = {}) {
 
   // === 路燈（兩側等距放置） ===
   const poleGeometry = new THREE.CylinderGeometry(poleRadius, poleRadius, poleHeight);
-  const poleMaterial = new THREE.MeshStandardMaterial({ color: 0x555555 });
+  const poleMaterial = new THREE.MeshStandardMaterial({ color: 0x5f5a56, roughness: 0.86, metalness: 0.1 });
   const lampGeometry = new THREE.SphereGeometry(lampRadius, 8, 8);
-  const lampMaterial = new THREE.MeshStandardMaterial({ color: 0xffffee, emissive: 0xffffee, emissiveIntensity: 1 });
+  const lampMaterial = new THREE.MeshStandardMaterial({ color: 0xfff2cf, emissive: 0xffd89a, emissiveIntensity: 1.25, roughness: 0.72, metalness: 0.05 });
 
   for (let z = -roadLength / 2 + spacing / 2; z <= roadLength / 2 - spacing / 2; z += spacing) {
     for (const side of [-1, 1]) {
@@ -94,7 +103,7 @@ export async function buildWorld(scene, options = {}) {
       scene.add(lamp);
 
       // point light
-      const light = new THREE.PointLight(0xffffff, baseIntensity, lightRange);
+      const light = new THREE.PointLight(0xffd9a8, baseIntensity, lightRange);
       light.position.copy(lamp.position);
       light.userData.baseIntensity = baseIntensity;  // 給 SkySystem 夜間用
       scene.add(light);
@@ -166,14 +175,23 @@ function createHouseVisual({
     const roofGeo = new THREE.BufferGeometry();
     roofGeo.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
     roofGeo.computeVertexNormals();
-    const roofMat = new THREE.MeshStandardMaterial({ color: roofColor, side: THREE.DoubleSide });
+    const roofMat = new THREE.MeshStandardMaterial({
+      color: roofColor,
+      side: THREE.DoubleSide,
+      roughness: VISUAL.materials.roofRoughness,
+      metalness: VISUAL.materials.roofMetalness,
+    });
     const roof = new THREE.Mesh(roofGeo, roofMat);
     roof.castShadow = roof.receiveShadow = true;
     group.add(roof);
     collidables.push(roof);
   }
 
-  const panelMat = new THREE.MeshStandardMaterial({ color: wallColor });
+  const panelMat = new THREE.MeshStandardMaterial({
+    color: wallColor,
+    roughness: VISUAL.materials.wallRoughness,
+    metalness: VISUAL.materials.wallMetalness,
+  });
 
   // 前牆（左右 + 上方招牌）
   {
@@ -216,7 +234,12 @@ function createHouseVisual({
         tex = textureLoader.load(sign.src);
       }
       const blank = panelMat;
-      const signMat = new THREE.MeshStandardMaterial({ map: tex, side: THREE.FrontSide });
+      const signMat = new THREE.MeshStandardMaterial({
+        map: tex,
+        side: THREE.FrontSide,
+        roughness: 0.8,
+        metalness: 0.02,
+      });
       const mats = [blank, blank, blank, blank, signMat, blank];
       headerPanel = new THREE.Mesh(headerGeo, mats);
     } else {
@@ -248,7 +271,12 @@ function createHouseVisual({
         tex = textureLoader.load(interior.back.src);
       }
       const blank = panelMat;
-      const interiorMat = new THREE.MeshStandardMaterial({ map: tex, side: THREE.FrontSide });
+      const interiorMat = new THREE.MeshStandardMaterial({
+        map: tex,
+        side: THREE.FrontSide,
+        roughness: 0.82,
+        metalness: 0.02,
+      });
       const mats = [blank, blank, blank, blank, interiorMat, blank];
       backPanel = new THREE.Mesh(backGeo, mats);
     } else {
@@ -291,7 +319,11 @@ function createHouseVisual({
     group.add(doorPivot);
 
     const doorGeo = getBoxGeometry(doorWidth, doorHeight, doorThickness);
-    const doorMat = new THREE.MeshStandardMaterial({ color: 0x663300 });
+    const doorMat = new THREE.MeshStandardMaterial({
+      color: VISUAL.materials.doorColor,
+      roughness: 0.78,
+      metalness: 0.04,
+    });
     const doorMesh = new THREE.Mesh(doorGeo, doorMat);
     doorMesh.position.set(doorWidth/2, doorHeight/2, doorThickness/2);
     doorMesh.castShadow = doorMesh.receiveShadow = true;

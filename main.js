@@ -11,6 +11,7 @@ import { DoorSystem } from './src/systems/DoorSystem.js';
 import { SkySystem } from './src/systems/SkySystem.js';
 import { InteractionSystem } from './src/systems/InteractionSystem.js';
 import { FlashlightSystem } from './src/systems/FlashlightSystem.js';
+import { PostFXSystem } from './src/systems/PostFXSystem.js';
 import { PlayerController } from './src/player/PlayerController.js';
 import { buildWorld } from './src/world/WorldBuilder.js';
 import { HUD } from './src/ui/HUD.js';
@@ -45,6 +46,10 @@ async function init() {
 
   const hud = new HUD();
   hud.init();
+
+  const postFX = new PostFXSystem(app.renderer, app.scene, app.camera);
+  postFX.init();
+  window.addEventListener('resize', () => postFX.onResize());
 
   // World（只產生 Mesh 與 metadata）
     const { collidableMeshes, doors, streetLights } = await buildWorld(app.scene, {
@@ -88,7 +93,7 @@ async function init() {
   loop.addFrame({ update: () => flashlight.update() });
   loop.addFrame({ update: () => interaction.update() });
   loop.addFrame({ update: (dt) => sky.update(dt) });
-  loop.addFrame({ update: () => app.render() });
+  loop.addFrame({ update: () => postFX.render() });
 
   loop.tick();
 }

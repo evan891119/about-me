@@ -5,6 +5,14 @@
 - 點擊門可以開關
 - 天空會依時間變化（白天 / 夜晚 / 星星 / 月亮）
 
+## 視覺風格目標
+
+目前專案視覺方向為：
+
+`Stylized Low-Poly + Diorama + Cinematic Warm Lighting`
+
+完整美術規格請看：`docs/ART_DIRECTION.md`
+
 ## 如何在本機跑起來
 
 這個專案是純前端 ES Modules，請用本機靜態伺服器（不要直接雙擊 `index.html`）。

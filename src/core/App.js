@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { VISUAL } from '../config.js';
 
 export class App {
   constructor() {
@@ -17,7 +18,13 @@ export class App {
     this.camera.position.set(0, 1.6, 5);
 
     this.renderer = new THREE.WebGLRenderer({ antialias: true });
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, VISUAL.pixelRatioMax));
     this.renderer.setSize(window.innerWidth, window.innerHeight);
+    this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.renderer.toneMappingExposure = VISUAL.toneMappingExposure;
+    this.renderer.shadowMap.enabled = true;
+    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     document.body.appendChild(this.renderer.domElement);
 
     // 取消文字選取（避免左鍵拖拉反白）
@@ -31,6 +38,7 @@ export class App {
   onResize() {
     this.camera.aspect = window.innerWidth / window.innerHeight;
     this.camera.updateProjectionMatrix();
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, VISUAL.pixelRatioMax));
     this.renderer.setSize(window.innerWidth, window.innerHeight);
   }
 

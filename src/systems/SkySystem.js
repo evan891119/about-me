@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { Sky } from 'https://cdn.jsdelivr.net/npm/three@0.152.2/examples/jsm/objects/Sky.js';
 import { getMoonPosition, getMoonIllumination } from 'https://cdn.skypack.dev/suncalc';
-import { SKY } from '../config.js';
+import { SKY, VISUAL } from '../config.js';
 
 export class SkySystem {
   /**
@@ -21,12 +21,20 @@ export class SkySystem {
     this._elapsedSinceUpdate = this.updateIntervalSec;
 
     // 固定色票（別每幀 new）
-    this.daySkyColor    = new THREE.Color(0x87CEEB);
-    this.nightSkyColor  = new THREE.Color(0x050D2B);
-    this.dayLightColor  = new THREE.Color(0xFFFFFF);
-    this.nightLightColor= new THREE.Color(0x666699);
-    this.dayGroundColor = new THREE.Color(0x444444);
-    this.nightGroundColor = new THREE.Color(0x111111);
+    this.daySkyColor = new THREE.Color(0xd9d6bf);
+    this.duskSkyColor = new THREE.Color(0xe6b17b);
+    this.nightSkyColor = new THREE.Color(0x16213a);
+    this.dayLightColor = new THREE.Color(0xfff3d0);
+    this.duskLightColor = new THREE.Color(0xffb074);
+    this.nightLightColor = new THREE.Color(0x7d91bf);
+    this.dayGroundColor = new THREE.Color(0x5f554a);
+    this.nightGroundColor = new THREE.Color(0x1a202d);
+    this._tmpWarmSky = new THREE.Color();
+    this._tmpWarmLight = new THREE.Color();
+    this._tmpFogColor = new THREE.Color();
+    this._fogDay = new THREE.Color(VISUAL.fog.dayColor);
+    this._fogDusk = new THREE.Color(VISUAL.fog.duskColor);
+    this._fogNight = new THREE.Color(VISUAL.fog.nightColor);
 
     // 背景交給 Sky shader
     this.scene.background = null;
@@ -36,10 +44,16 @@ export class SkySystem {
     this.sky.scale.setScalar(skyScale);
     scene.add(this.sky);
     const U = this.sky.material.uniforms;
-    U.turbidity.value = 10;
-    U.rayleigh.value = 2;
-    U.mieCoefficient.value = 0.005;
-    U.mieDirectionalG.value = 0.8;
+    U.turbidity.value = 9;
+    U.rayleigh.value = 1.5;
+    U.mieCoefficient.value = 0.008;
+    U.mieDirectionalG.value = 0.86;
+
+    this.scene.fog = new THREE.Fog(
+      VISUAL.fog.dayColor,
+      VISUAL.fog.near,
+      VISUAL.fog.far
+    );
 
     // Stars
     {
@@ -84,6 +98,14 @@ export class SkySystem {
     this.dirLight = new THREE.DirectionalLight(0xffffff, 0.6);
     this.dirLight.position.set(-3, 10, -10);
     this.dirLight.castShadow = true;
+    this.dirLight.shadow.mapSize.set(VISUAL.shadows.mapSize, VISUAL.shadows.mapSize);
+    this.dirLight.shadow.bias = VISUAL.shadows.bias;
+    this.dirLight.shadow.camera.near = 1;
+    this.dirLight.shadow.camera.far = 120;
+    this.dirLight.shadow.camera.left = -40;
+    this.dirLight.shadow.camera.right = 40;
+    this.dirLight.shadow.camera.top = 40;
+    this.dirLight.shadow.camera.bottom = -40;
     scene.add(this.dirLight);
 
     // 路燈的基礎亮度記錄，夜晚用
@@ -120,18 +142,22 @@ export class SkySystem {
     const sunY = Math.sin(angle) * 100;
     this.dirLight.position.set(sunX, sunY, -30);
 
-    const sunIntensity = Math.max(Math.sin(angle), 0); // 0~1
+    const sunHeight = Math.max(Math.sin(angle), 0); // 0~1
+    const warmMix = 1 - Math.min(1, Math.abs(sunHeight - 0.32) / 0.32);
+    const sunIntensity = 0.12 + sunHeight * 0.88;
 
     this.dirLight.intensity = sunIntensity;
-    this.dirLight.color.lerpColors(this.nightLightColor, this.dayLightColor, sunIntensity);
+    this._tmpWarmLight.lerpColors(this.dayLightColor, this.duskLightColor, warmMix);
+    this.dirLight.color.lerpColors(this.nightLightColor, this._tmpWarmLight, sunHeight);
 
-    const hemiIntensity = sunIntensity * 0.5 + 0.2;
+    const hemiIntensity = 0.2 + sunHeight * 0.45;
     this.hemiLight.intensity = hemiIntensity;
-    this.hemiLight.color.lerpColors(this.nightSkyColor, this.daySkyColor, sunIntensity);
-    this.hemiLight.groundColor.lerpColors(this.nightGroundColor, this.dayGroundColor, sunIntensity);
+    this._tmpWarmSky.lerpColors(this.daySkyColor, this.duskSkyColor, warmMix);
+    this.hemiLight.color.lerpColors(this.nightSkyColor, this._tmpWarmSky, sunHeight);
+    this.hemiLight.groundColor.lerpColors(this.nightGroundColor, this.dayGroundColor, sunHeight);
 
     this.sky.material.uniforms.sunPosition.value.copy(this.dirLight.position);
-    this.stars.visible = (sunIntensity < 0.2);
+    this.stars.visible = (sunHeight < 0.12);
 
     // 月亮位置 & 月相
     const mp = getMoonPosition(now, this.lat, this.lon);
@@ -155,9 +181,12 @@ export class SkySystem {
     if (this.streetLights?.length) {
       this.streetLights.forEach(light => {
         const base = light.userData?.baseIntensity ?? 1;
-        light.intensity = base * (1 - sunIntensity);
+        light.intensity = base * (1 - sunHeight) * 1.15;
       });
     }
+
+    this._tmpFogColor.copy(this._fogNight).lerp(this._fogDusk, warmMix).lerp(this._fogDay, sunHeight);
+    this.scene.fog.color.copy(this._tmpFogColor);
   }
 
   _drawMoonPhase(fraction, phase = 0) {
