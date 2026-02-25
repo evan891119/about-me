@@ -42,7 +42,7 @@ python3 -m http.server 4173
 - 物理：`src/physics/Physics.js`, `src/systems/StaticColliderSystem.js`
 - 玩家控制：`src/player/PlayerController.js`
 - 世界生成：`src/world/WorldBuilder.js`
-- 互動系統：`src/systems/InteractionSystem.js`, `src/systems/DoorSystem.js`, `src/systems/SkySystem.js`, `src/systems/FlashlightSystem.js`
+- 互動系統：`src/systems/InteractionSystem.js`, `src/systems/DoorSystem.js`, `src/systems/SkySystem.js`, `src/systems/FlashlightSystem.js`, `src/systems/ShowcaseCameraSystem.js`
 - 後處理：`src/systems/PostFXSystem.js`
 - 內容資料：`src/content.js`
 - 參數集中設定：`src/config.js`（含 `VISUAL` 視覺參數）
@@ -88,6 +88,7 @@ python3 -m http.server 4173
    - 行為變更摘要
    - 驗收結果
    - 已知風險或未驗證項目
+   - 若本次含視覺調整，附上 `docs/SHOTLIST.md` 定義的 3 張對照截圖
 
 ## 9) 提交前檢查
 

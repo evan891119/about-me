@@ -48,6 +48,21 @@
 - 看板與內容圖像：
   - 允許少量色偏校正，避免貼圖與世界脫節。
 
+## Prop Density Rules
+- 每個區塊使用「小群組」而不是單顆大型物件（2~5 物件為一群）。
+- 優先使用：
+  - 木箱堆（crate stack）
+  - 桶子群（barrel cluster）
+  - 圍欄與告示（fence + sign）
+  - 低多邊形樹與草叢
+- 目標是 360 度視角都能看到前景/中景/後景層次，而非只有建築牆面。
+
+## Camera Composition Rules
+- 遊玩模式維持第一人稱。
+- 展示模式（`V`）使用固定高機位斜俯角構圖。
+- 展示模式 FOV 以 `showcaseFov` 為準（避免過廣角造成玩具感流失）。
+- 截圖請優先採用 `docs/SHOTLIST.md` 的三個固定機位。
+
 ## Post Process Recipe
 - Tone Mapping: ACESFilmic
 - Output Color Space: sRGB
@@ -72,3 +87,4 @@
 3. 黃昏畫面有明顯暖色電影感。
 4. 夜景仍可導航，路燈與手電筒是主要焦點。
 5. Bloom 不讓提示文字與介面糊掉。
+6. 場景有穩定道具密度，遠景不空、近景不亂。

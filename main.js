@@ -12,6 +12,7 @@ import { SkySystem } from './src/systems/SkySystem.js';
 import { InteractionSystem } from './src/systems/InteractionSystem.js';
 import { FlashlightSystem } from './src/systems/FlashlightSystem.js';
 import { PostFXSystem } from './src/systems/PostFXSystem.js';
+import { ShowcaseCameraSystem } from './src/systems/ShowcaseCameraSystem.js';
 import { PlayerController } from './src/player/PlayerController.js';
 import { buildWorld } from './src/world/WorldBuilder.js';
 import { HUD } from './src/ui/HUD.js';
@@ -72,6 +73,9 @@ async function init() {
   // 手電筒（E 切換）
   const flashlight = new FlashlightSystem(app.scene, app.camera, input);
 
+  // 展示鏡頭（V 切換）
+  const showcase = new ShowcaseCameraSystem(app.camera, input);
+
   // 門系統
   const doorSystem = new DoorSystem(physics);
   if (typeof doorSystem.registerDoors === 'function') {
@@ -85,12 +89,13 @@ async function init() {
   const interaction = new InteractionSystem(app.camera, player.rb, doorSystem, doorMeshes, hud);
 
   // 固定步進：玩家 -> 門 -> 物理
-  loop.addFixed({ update: dt => player.update(dt) });
+  loop.addFixed({ update: dt => { if (!showcase.isActive) player.update(dt); } });
   loop.addFixed({ update: dt => doorSystem.update(dt) });
   loop.addFixed({ update: (dt) => physics.step(dt) });
 
   // 每幀更新：輸入/互動/天空/渲染
   loop.addFrame({ update: () => flashlight.update() });
+  loop.addFrame({ update: (dt) => showcase.update(dt) });
   loop.addFrame({ update: () => interaction.update() });
   loop.addFrame({ update: (dt) => sky.update(dt) });
   loop.addFrame({ update: () => postFX.render() });

@@ -6,6 +6,7 @@ export class Input {
     this.sprinting = false;
     this.jump = false;
     this.flashlightToggleRequested = false;
+    this.showcaseToggleRequested = false;
     this.controls = null;
     this.blocker = null;
 
@@ -52,6 +53,7 @@ export class Input {
       case 'ShiftLeft': case 'ShiftRight': this.sprinting = true; break;
       case 'Space': this.jump = true; break;
       case 'KeyE': this.flashlightToggleRequested = true; break;
+      case 'KeyV': this.showcaseToggleRequested = true; break;
     }
   }
 
@@ -68,6 +70,12 @@ export class Input {
   consumeFlashlightToggle() {
     if (!this.flashlightToggleRequested) return false;
     this.flashlightToggleRequested = false;
+    return true;
+  }
+
+  consumeShowcaseToggle() {
+    if (!this.showcaseToggleRequested) return false;
+    this.showcaseToggleRequested = false;
     return true;
   }
 

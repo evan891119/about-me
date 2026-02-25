@@ -3,6 +3,51 @@ export const HOUSE_LAYOUT = {
   zPositions: [-15, 5],
 };
 
+export const PROP_LAYOUT = [
+  {
+    id: 'north-left',
+    position: { x: -9, y: 0, z: -24 },
+    spread: { x: 4.5, z: 3.6 },
+    prefabs: ['crate', 'barrel', 'fence', 'tree'],
+    count: 10,
+  },
+  {
+    id: 'north-right',
+    position: { x: 9.5, y: 0, z: -22 },
+    spread: { x: 4.2, z: 3.8 },
+    prefabs: ['crate', 'barrel', 'tree', 'grass'],
+    count: 11,
+  },
+  {
+    id: 'center-left',
+    position: { x: -10, y: 0, z: -6 },
+    spread: { x: 5.2, z: 4.0 },
+    prefabs: ['crate', 'fence', 'grass', 'tree'],
+    count: 12,
+  },
+  {
+    id: 'center-right',
+    position: { x: 10, y: 0, z: -5 },
+    spread: { x: 5.2, z: 4.0 },
+    prefabs: ['crate', 'barrel', 'grass', 'tree'],
+    count: 12,
+  },
+  {
+    id: 'south-left',
+    position: { x: -9, y: 0, z: 13 },
+    spread: { x: 4.6, z: 3.8 },
+    prefabs: ['barrel', 'fence', 'tree', 'grass'],
+    count: 10,
+  },
+  {
+    id: 'south-right',
+    position: { x: 9, y: 0, z: 14 },
+    spread: { x: 4.6, z: 3.8 },
+    prefabs: ['crate', 'barrel', 'fence', 'grass'],
+    count: 10,
+  },
+];
+
 export const HOUSE_CONFIGS = [
   {
     lane: -1,

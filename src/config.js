@@ -51,6 +51,18 @@ export const VISUAL = {
     bloomStrength: 0.22,
     bloomRadius: 0.35,
     bloomThreshold: 0.78,
+    contrast: 1.06,
+    saturation: 1.08,
+    gamma: 1.0,
+  },
+  propsDensity: {
+    enabled: true,
+    multiplier: 1.0,
+  },
+  camera: {
+    showcaseFov: 62,
+    showcasePosition: { x: 0, y: 14, z: 22 },
+    showcaseLookAt: { x: 0, y: 1.2, z: -4 },
   },
   materials: {
     ground: { color: 0x8f8d66, roughness: 0.92, metalness: 0.02 },
