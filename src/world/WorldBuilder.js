@@ -2,6 +2,19 @@ import * as THREE from 'three';
 import { HOUSE_CONFIGS, HOUSE_LAYOUT } from '../content.js';
 import { PLAYER } from '../config.js';
 
+const sharedTextureLoader = new THREE.TextureLoader();
+const boxGeometryCache = new Map();
+
+function getBoxGeometry(width, height, depth) {
+  const key = `${width}|${height}|${depth}`;
+  let geo = boxGeometryCache.get(key);
+  if (!geo) {
+    geo = new THREE.BoxGeometry(width, height, depth);
+    boxGeometryCache.set(key, geo);
+  }
+  return geo;
+}
+
 /**
  * 建立場景幾何（純視覺，不含 Rapier），回傳：
  *  - collidableMeshes：可供 raycast / 之後建立靜態碰撞
@@ -37,7 +50,7 @@ export async function buildWorld(scene, options = {}) {
   // === 地面（貼圖 + 重複 + 各向異性） ===
   {
     const geo = new THREE.PlaneGeometry(groundSize, groundSize);
-    const tex = new THREE.TextureLoader().load(groundTexture, (t) => {
+    const tex = sharedTextureLoader.load(groundTexture, (t) => {
       t.wrapS = t.wrapT = THREE.RepeatWrapping;
       t.repeat.set(groundRepeat, groundRepeat);
       t.anisotropy = maxAnisotropy;              // 直接設，Renderer 會自動 clamp
@@ -61,23 +74,22 @@ export async function buildWorld(scene, options = {}) {
   }
 
   // === 路燈（兩側等距放置） ===
+  const poleGeometry = new THREE.CylinderGeometry(poleRadius, poleRadius, poleHeight);
+  const poleMaterial = new THREE.MeshStandardMaterial({ color: 0x555555 });
+  const lampGeometry = new THREE.SphereGeometry(lampRadius, 8, 8);
+  const lampMaterial = new THREE.MeshStandardMaterial({ color: 0xffffee, emissive: 0xffffee, emissiveIntensity: 1 });
+
   for (let z = -roadLength / 2 + spacing / 2; z <= roadLength / 2 - spacing / 2; z += spacing) {
     for (const side of [-1, 1]) {
       const x = side * sideOffset;
 
       // pole
-      const pole = new THREE.Mesh(
-        new THREE.CylinderGeometry(poleRadius, poleRadius, poleHeight),
-        new THREE.MeshStandardMaterial({ color: 0x555555 })
-      );
+      const pole = new THREE.Mesh(poleGeometry, poleMaterial);
       pole.position.set(x, poleHeight / 2, z);
       scene.add(pole);
 
       // lamp mesh
-      const lamp = new THREE.Mesh(
-        new THREE.SphereGeometry(lampRadius, 8, 8),
-        new THREE.MeshStandardMaterial({ color: 0xffffee, emissive: 0xffffee, emissiveIntensity: 1 })
-      );
+      const lamp = new THREE.Mesh(lampGeometry, lampMaterial);
       lamp.position.set(x, poleHeight + lampRadius, z);
       scene.add(lamp);
 
@@ -108,7 +120,7 @@ export async function buildWorld(scene, options = {}) {
   });
 
   houseConfigs.forEach(cfg => {
-    const { group, collidables, doorPair } = createHouseVisual(cfg);
+    const { group, collidables, doorPair } = createHouseVisual(cfg, { textureLoader: sharedTextureLoader });
     group.position.copy(cfg.position);
     scene.add(group);
 
@@ -124,7 +136,7 @@ function createHouseVisual({
   width = 4, height = 2.5, depth = 8,
   wallColor = 0xFFFFFF, roofColor = 0x882200,
   sign = null, interior = null
-} = {}) {
+} = {}, { textureLoader = sharedTextureLoader } = {}) {
   const group = new THREE.Group();
   const collidables = [];
 
@@ -169,7 +181,7 @@ function createHouseVisual({
     const leftPanelWidth = (width - doorWidth) / 2;
 
     const leftPanel = new THREE.Mesh(
-      new THREE.BoxGeometry(leftPanelWidth, height, panelThickness),
+      getBoxGeometry(leftPanelWidth, height, panelThickness),
       panelMat
     );
     leftPanel.position.set(-doorWidth/2 - leftPanelWidth/2, height/2, depth/2 - panelThickness/2);
@@ -178,7 +190,7 @@ function createHouseVisual({
     collidables.push(leftPanel);
 
     const rightPanel = new THREE.Mesh(
-      new THREE.BoxGeometry(leftPanelWidth, height, panelThickness),
+      getBoxGeometry(leftPanelWidth, height, panelThickness),
       panelMat
     );
     rightPanel.position.set(doorWidth/2 + leftPanelWidth/2, height/2, depth/2 - panelThickness/2);
@@ -187,7 +199,7 @@ function createHouseVisual({
     collidables.push(rightPanel);
 
     const headerHeight = height - doorHeight;
-    const headerGeo = new THREE.BoxGeometry(doorWidth, headerHeight, panelThickness);
+    const headerGeo = getBoxGeometry(doorWidth, headerHeight, panelThickness);
     let headerPanel;
     if (sign) {
       let tex;
@@ -201,7 +213,7 @@ function createHouseVisual({
         ctx.fillText(sign.text, c.width/2, c.height/2);
         tex = new THREE.CanvasTexture(c); tex.needsUpdate = true;
       } else if (sign.type === 'image') {
-        tex = new THREE.TextureLoader().load(sign.src);
+        tex = textureLoader.load(sign.src);
       }
       const blank = panelMat;
       const signMat = new THREE.MeshStandardMaterial({ map: tex, side: THREE.FrontSide });
@@ -219,7 +231,7 @@ function createHouseVisual({
   // 後牆
   {
     const panelThickness = doorThickness;
-    const backGeo = new THREE.BoxGeometry(width, height, panelThickness);
+    const backGeo = getBoxGeometry(width, height, panelThickness);
     let backPanel;
     if (interior?.back) {
       let tex;
@@ -233,7 +245,7 @@ function createHouseVisual({
         ctx.fillText(interior.back.text, c.width/2, c.height/2);
         tex = new THREE.CanvasTexture(c); tex.needsUpdate = true;
       } else if (interior.back.type === 'image') {
-        tex = new THREE.TextureLoader().load(interior.back.src);
+        tex = textureLoader.load(interior.back.src);
       }
       const blank = panelMat;
       const interiorMat = new THREE.MeshStandardMaterial({ map: tex, side: THREE.FrontSide });
@@ -253,7 +265,7 @@ function createHouseVisual({
     const panelThickness = doorThickness;
 
     const leftSide = new THREE.Mesh(
-      new THREE.BoxGeometry(panelThickness, height, depth),
+      getBoxGeometry(panelThickness, height, depth),
       panelMat
     );
     leftSide.position.set(-width/2 + panelThickness/2, height/2, 0);
@@ -262,7 +274,7 @@ function createHouseVisual({
     collidables.push(leftSide);
 
     const rightSide = new THREE.Mesh(
-      new THREE.BoxGeometry(panelThickness, height, depth),
+      getBoxGeometry(panelThickness, height, depth),
       panelMat
     );
     rightSide.position.set(width/2 - panelThickness/2, height/2, 0);
@@ -278,7 +290,7 @@ function createHouseVisual({
     doorPivot.position.set(-doorWidth/2, 0, depth/2);
     group.add(doorPivot);
 
-    const doorGeo = new THREE.BoxGeometry(doorWidth, doorHeight, doorThickness);
+    const doorGeo = getBoxGeometry(doorWidth, doorHeight, doorThickness);
     const doorMat = new THREE.MeshStandardMaterial({ color: 0x663300 });
     const doorMesh = new THREE.Mesh(doorGeo, doorMat);
     doorMesh.position.set(doorWidth/2, doorHeight/2, doorThickness/2);

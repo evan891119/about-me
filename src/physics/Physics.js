@@ -8,5 +8,11 @@ export class Physics {
     this.world = new RAPIER.World(PHYSICS.gravity);
     this.ready = true;
   }
-  step() { if (this.ready) this.world.step(); }
+  step(dt) {
+    if (!this.ready) return;
+    if (typeof dt === 'number') {
+      this.world.integrationParameters.dt = dt;
+    }
+    this.world.step();
+  }
 }

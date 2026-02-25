@@ -4,6 +4,7 @@ import { App } from './src/core/App.js';
 import { Loop } from './src/core/Loop.js';
 import { Input } from './src/core/Input.js';
 import { Physics } from './src/physics/Physics.js';
+import { PHYSICS } from './src/config.js';
 
 import { StaticColliderSystem } from './src/systems/StaticColliderSystem.js';
 import { DoorSystem } from './src/systems/DoorSystem.js';
@@ -29,7 +30,10 @@ async function init() {
   const app = new App();
   app.init();
 
-  const loop = new Loop();
+  const loop = new Loop({
+    fixedTimeStep: PHYSICS.fixedTimeStep,
+    maxSubSteps: PHYSICS.maxSubSteps,
+  });
 
   const physics = new Physics();
   await physics.init();
@@ -72,16 +76,19 @@ async function init() {
   }
 
   // 射線互動（點門）
-  const interaction = new InteractionSystem(app.camera, player.rb, doorSystem, collidableMeshes, hud);
+  const doorMeshes = doors.map((d) => d.mesh);
+  const interaction = new InteractionSystem(app.camera, player.rb, doorSystem, doorMeshes, hud);
 
-  // 更新序
-  loop.add({ update: dt => player.update(dt) });
-  loop.add({ update: () => flashlight.update() });
-  loop.add({ update: () => interaction.update() });
-  loop.add({ update: dt => doorSystem.update(dt) });
-  loop.add({ update: (dt) => sky.update(dt) });
-  loop.add({ update: ()  => physics.step() });
-  loop.add({ update: ()  => app.render() });
+  // 固定步進：玩家 -> 門 -> 物理
+  loop.addFixed({ update: dt => player.update(dt) });
+  loop.addFixed({ update: dt => doorSystem.update(dt) });
+  loop.addFixed({ update: (dt) => physics.step(dt) });
+
+  // 每幀更新：輸入/互動/天空/渲染
+  loop.addFrame({ update: () => flashlight.update() });
+  loop.addFrame({ update: () => interaction.update() });
+  loop.addFrame({ update: (dt) => sky.update(dt) });
+  loop.addFrame({ update: () => app.render() });
 
   loop.tick();
 }

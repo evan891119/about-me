@@ -7,26 +7,39 @@ export class Input {
     this.jump = false;
     this.flashlightToggleRequested = false;
     this.controls = null;
+    this.blocker = null;
+
+    this.onBlockerClick = () => this.controls?.lock();
+    this.onControlsLock = () => {
+      if (this.blocker) this.blocker.style.display = 'none';
+    };
+    this.onControlsUnlock = () => {
+      if (this.blocker) this.blocker.style.display = 'flex';
+    };
+    this.onBodyClick = () => this.controls?.lock();
+    this.onMouseDownPreventDefault = (e) => {
+      if (e.button === 0) e.preventDefault();
+    };
   }
 
   attach(camera) {
     this.controls = new PointerLockControls(camera, document.body);
 
     // 點擊 #blocker 進入鎖定，沒 blocker 就第一次點畫面
-    const blocker = document.getElementById('blocker');
-    if (blocker) {
-      blocker.addEventListener('click', () => this.controls.lock());
-      this.controls.addEventListener('lock', () => blocker.style.display = 'none');
-      this.controls.addEventListener('unlock', () => blocker.style.display = 'flex');
+    this.blocker = document.getElementById('blocker');
+    if (this.blocker) {
+      this.blocker.addEventListener('click', this.onBlockerClick);
+      this.controls.addEventListener('lock', this.onControlsLock);
+      this.controls.addEventListener('unlock', this.onControlsUnlock);
     } else {
-      document.body.addEventListener('click', () => this.controls.lock(), { once: true });
+      document.body.addEventListener('click', this.onBodyClick, { once: true });
     }
 
     document.addEventListener('keydown', this.onKeyDown);
     document.addEventListener('keyup', this.onKeyUp);
 
     // 也避免拖曳選取
-    document.addEventListener('mousedown', (e)=>{ if (e.button===0) e.preventDefault(); });
+    document.addEventListener('mousedown', this.onMouseDownPreventDefault);
   }
 
   onKeyDown = (e) => {
@@ -56,5 +69,21 @@ export class Input {
     if (!this.flashlightToggleRequested) return false;
     this.flashlightToggleRequested = false;
     return true;
+  }
+
+  dispose() {
+    document.removeEventListener('keydown', this.onKeyDown);
+    document.removeEventListener('keyup', this.onKeyUp);
+    document.removeEventListener('mousedown', this.onMouseDownPreventDefault);
+    document.body.removeEventListener('click', this.onBodyClick);
+
+    if (this.blocker) {
+      this.blocker.removeEventListener('click', this.onBlockerClick);
+    }
+
+    if (this.controls) {
+      this.controls.removeEventListener('lock', this.onControlsLock);
+      this.controls.removeEventListener('unlock', this.onControlsUnlock);
+    }
   }
 }

@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { Sky } from 'https://cdn.jsdelivr.net/npm/three@0.152.2/examples/jsm/objects/Sky.js';
 import { getMoonPosition, getMoonIllumination } from 'https://cdn.skypack.dev/suncalc';
+import { SKY } from '../config.js';
 
 export class SkySystem {
   /**
@@ -16,6 +17,8 @@ export class SkySystem {
     this.lat = lat;
     this.lon = lon;
     this.streetLights = streetLights;
+    this.updateIntervalSec = SKY.updateIntervalSec;
+    this._elapsedSinceUpdate = this.updateIntervalSec;
 
     // 固定色票（別每幀 new）
     this.daySkyColor    = new THREE.Color(0x87CEEB);
@@ -102,7 +105,11 @@ export class SkySystem {
     });
   }
 
-  update(/* dt */) {
+  update(dt = 0) {
+    this._elapsedSinceUpdate += dt;
+    if (this._elapsedSinceUpdate < this.updateIntervalSec) return;
+    this._elapsedSinceUpdate = 0;
+
     const now = new Date();
 
     // 太陽路徑（簡化：用本地小時做角度）

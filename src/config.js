@@ -1,5 +1,7 @@
 export const PHYSICS = {
   gravity: { x: 0, y: -18, z: 0 },
+  fixedTimeStep: 1 / 60,
+  maxSubSteps: 3,
 };
 
 export const PLAYER = {
@@ -23,4 +25,8 @@ export const WORLD = {
 export const INTERACTION = {
   doorRange: 2.0,
   doorAnimSec: 0.6,
+};
+
+export const SKY = {
+  updateIntervalSec: 0.5,
 };

@@ -23,6 +23,7 @@ export class PlayerController {
 
     this._f = new THREE.Vector3();
     this._r = new THREE.Vector3();
+    this._up = new THREE.Vector3(0, 1, 0);
     this._dir = new THREE.Vector3();
     this._hv = new THREE.Vector3();
     this._targetHv = new THREE.Vector3();
@@ -44,7 +45,7 @@ export class PlayerController {
   update(dt) {
     // 方向
     this.camera.getWorldDirection(this._f).setY(0).normalize();
-    this._r.crossVectors(this._f, new THREE.Vector3(0,1,0)).normalize();
+    this._r.crossVectors(this._f, this._up).normalize();
     this._dir.set(0,0,0);
     if (this.input.forward)  this._dir.add(this._f);
     if (this.input.backward) this._dir.sub(this._f);

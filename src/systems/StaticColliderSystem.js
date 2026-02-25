@@ -59,7 +59,7 @@ export class StaticColliderSystem {
 
     this._box.setFromObject(mesh);
     this._half.copy(this._box.max).sub(this._box.min).multiplyScalar(0.5);
-    this._center.copy(this._box.getCenter(new THREE.Vector3()));
+    this._box.getCenter(this._center);
     mesh.getWorldQuaternion(this._quat);
 
     this.world.createCollider(
