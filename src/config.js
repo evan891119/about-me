@@ -29,6 +29,12 @@ export const WORLD = {
     entranceHeight: 3.4,
     zonePadding: 2.2,
     corridorWidth: 5.4,
+    placement: {
+      side: 'right',
+      roadGap: 5,
+      zOffset: 0,
+      footprintPadding: 2,
+    },
   },
 };
 
@@ -71,8 +77,8 @@ export const VISUAL = {
   },
   camera: {
     showcaseFov: 62,
-    showcasePosition: { x: 0, y: 14, z: 22 },
-    showcaseLookAt: { x: 0, y: 1.2, z: -4 },
+    showcaseOffset: { x: -30, y: 15, z: 22 },
+    showcaseLookAtOffset: { x: 8, y: 0, z: 0 },
   },
   night: {
     minSunIntensity: 0.18,

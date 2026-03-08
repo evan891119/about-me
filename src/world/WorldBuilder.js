@@ -19,6 +19,7 @@ function getBoxGeometry(width, height, depth) {
  * 建立場景幾何（純視覺，不含 Rapier），回傳：
  *  - collidableMeshes：可供 raycast / 之後建立靜態碰撞
  *  - doors：{ mesh, pivot }（給 DoorSystem）
+ *  - museumAnchor：博物館世界位置資訊（給鏡頭與道具避讓）
  *  - streetLights：THREE.PointLight[]（給 SkySystem 控制日夜亮度）
  */
 export async function buildWorld(scene, options = {}) {
@@ -114,16 +115,20 @@ export async function buildWorld(scene, options = {}) {
 
   // === 單一大型博物館 ===
   const museum = createMuseumVisual();
+  const museumPlacement = getMuseumPlacement(roadWidth);
+  applyMuseumPlacement(museum.group, museumPlacement);
   scene.add(museum.group);
+  museum.group.updateMatrixWorld(true);
+  const museumAnchor = createMuseumAnchor(museum, museumPlacement);
   collidableMeshes.push(...museum.collidables);
   doors.push(...museum.doors);
 
   if (VISUAL.propsDensity.enabled) {
-    const propGroup = buildPropClusters(roadWidth);
+    const propGroup = buildPropClusters(roadWidth, museumAnchor.footprint);
     scene.add(propGroup);
   }
 
-  return { collidableMeshes, doors, streetLights };
+  return { collidableMeshes, doors, museumAnchor, streetLights };
 }
 
 function createMuseumVisual() {
@@ -282,6 +287,51 @@ function createMuseumVisual() {
   return { group, collidables, doors };
 }
 
+function getMuseumPlacement(roadWidth) {
+  const museumCfg = WORLD.museum ?? {};
+  const placementCfg = museumCfg.placement ?? {};
+  const side = placementCfg.side === 'left' ? 'left' : 'right';
+  const roadGap = placementCfg.roadGap ?? 5;
+  const zOffset = placementCfg.zOffset ?? 0;
+  const halfDepth = (museumCfg.depth ?? 52) / 2;
+  const xSign = side === 'left' ? -1 : 1;
+
+  return {
+    footprintPadding: placementCfg.footprintPadding ?? 2,
+    position: new THREE.Vector3(
+      xSign * (roadWidth / 2 + roadGap + halfDepth),
+      0,
+      zOffset
+    ),
+    rotationY: side === 'left' ? Math.PI / 2 : -Math.PI / 2,
+  };
+}
+
+function applyMuseumPlacement(group, placement) {
+  group.position.copy(placement.position);
+  group.rotation.y = placement.rotationY;
+}
+
+function createMuseumAnchor(museum, placement) {
+  const center = museum.group.getWorldPosition(new THREE.Vector3());
+  const entrance = museum.doors[0]?.mesh
+    ? museum.doors[0].mesh.getWorldPosition(new THREE.Vector3())
+    : center.clone();
+  const bounds = new THREE.Box3().setFromObject(museum.group);
+  const padding = placement.footprintPadding ?? 0;
+
+  return {
+    center,
+    entrance,
+    footprint: {
+      minX: bounds.min.x - padding,
+      maxX: bounds.max.x + padding,
+      minZ: bounds.min.z - padding,
+      maxZ: bounds.max.z + padding,
+    },
+  };
+}
+
 function createZoneDisplay(zone, panelWidth, panelHeight, panelDepth) {
   const g = new THREE.Group();
   const panelMat = new THREE.MeshStandardMaterial({ color: 0xf2ede3, roughness: 0.86, metalness: 0.02 });
@@ -398,7 +448,7 @@ function createDoorAssembly({ width, height, thickness, color = 0x7f5430 }) {
   return { mesh: doorMesh, pivot };
 }
 
-function buildPropClusters(roadWidth) {
+function buildPropClusters(roadWidth, blockedFootprint = null) {
   const group = new THREE.Group();
   const mul = Math.max(0.2, VISUAL.propsDensity.multiplier ?? 1);
   const palette = {
@@ -424,6 +474,7 @@ function buildPropClusters(roadWidth) {
       const x = zone.position.x + offX;
       const z = zone.position.z + offZ;
       if (Math.abs(x) < roadWidth * 0.65) continue;
+      if (isPointInsideFootprint(x, z, blockedFootprint)) continue;
       prefab.position.set(x, 0, z);
       prefab.rotation.y = rng() * Math.PI * 2;
       group.add(prefab);
@@ -535,4 +586,14 @@ function mulberry32(seed) {
     t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
+}
+
+function isPointInsideFootprint(x, z, footprint) {
+  if (!footprint) return false;
+  return (
+    x >= footprint.minX &&
+    x <= footprint.maxX &&
+    z >= footprint.minZ &&
+    z <= footprint.maxZ
+  );
 }

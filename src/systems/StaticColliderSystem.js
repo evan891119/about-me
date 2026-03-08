@@ -15,9 +15,7 @@ export class StaticColliderSystem {
     this.opts = { ...WORLD, ...options };
 
     // 暫存用，避免每幀 new
-    this._box = new THREE.Box3();
     this._center = new THREE.Vector3();
-    this._half = new THREE.Vector3();
     this._quat = new THREE.Quaternion();
   }
 
@@ -55,16 +53,16 @@ export class StaticColliderSystem {
   }
 
   _addColliderForBoxMesh(mesh) {
-    mesh.updateWorldMatrix(true, true);
+    const gp = mesh.geometry?.parameters;
+    if (!gp) return;
 
-    this._box.setFromObject(mesh);
-    this._half.copy(this._box.max).sub(this._box.min).multiplyScalar(0.5);
-    this._box.getCenter(this._center);
+    mesh.updateWorldMatrix(true, true);
+    mesh.getWorldPosition(this._center);
     mesh.getWorldQuaternion(this._quat);
 
     this.world.createCollider(
       RAPIER.ColliderDesc
-        .cuboid(this._half.x, this._half.y, this._half.z)
+        .cuboid(gp.width / 2, gp.height / 2, gp.depth / 2)
         .setTranslation(this._center.x, this._center.y, this._center.z)
         .setRotation({ x:this._quat.x, y:this._quat.y, z:this._quat.z, w:this._quat.w })
     );

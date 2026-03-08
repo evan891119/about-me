@@ -53,15 +53,15 @@ async function init() {
   window.addEventListener('resize', () => postFX.onResize());
 
   // World（只產生 Mesh 與 metadata）
-    const { collidableMeshes, doors, streetLights } = await buildWorld(app.scene, {
+  const { collidableMeshes, doors, museumAnchor, streetLights } = await buildWorld(app.scene, {
     maxAnisotropy: app.renderer.capabilities.getMaxAnisotropy()
-    });
+  });
 
-    const sky = new SkySystem(app.scene, {
+  const sky = new SkySystem(app.scene, {
     lat: 25.0330,
     lon: 121.5654,
     streetLights
-    });
+  });
 
   // 靜態碰撞
   const staticCols = new StaticColliderSystem(physics, collidableMeshes);
@@ -74,7 +74,7 @@ async function init() {
   const flashlight = new FlashlightSystem(app.scene, app.camera, input);
 
   // 展示鏡頭（V 切換）
-  const showcase = new ShowcaseCameraSystem(app.camera, input);
+  const showcase = new ShowcaseCameraSystem(app.camera, input, museumAnchor);
 
   // 門系統
   const doorSystem = new DoorSystem(physics);
