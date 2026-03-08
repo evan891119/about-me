@@ -90,8 +90,20 @@ export const VISUAL = {
   },
   museumInterior: {
     baseFillIntensity: 0.32,
-    zoneLightIntensity: 0.42,
-    zoneLightRange: 12,
+    ceilingLights: {
+      enabled: true,
+      lightsPerZone: 2,
+      color: 0xffe2b5,
+      intensity: 1,
+      range: 30,
+      heightOffset: 0.9,
+      zoneInsetX: 1.3,
+      zoneInsetZ: 3.4,
+      fixtureSize: { width: 1.2, height: 0.16, depth: 0.5 },
+      drop: 0.35,
+      fixtureColor: 0xe9dec8,
+      glowEmissive: 0xffc977,
+    },
   },
   materials: {
     ground: { color: 0x8f8d66, roughness: 0.92, metalness: 0.02 },

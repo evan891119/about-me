@@ -163,6 +163,7 @@ function createMuseumVisual() {
     transparent: true,
     opacity: 0.35,
   });
+  const ceilingLightCfg = VISUAL.museumInterior.ceilingLights ?? {};
 
   const roof = new THREE.Mesh(getBoxGeometry(width, wallThickness, depth), trimMat);
   roof.position.set(0, height + wallThickness / 2, 0);
@@ -265,7 +266,19 @@ function createMuseumVisual() {
   const zonePanelH = 2.3;
   const zonePanelD = 0.08;
 
-  const zoneLight = new THREE.PointLight(0xfff0d8, VISUAL.museumInterior.zoneLightIntensity, VISUAL.museumInterior.zoneLightRange);
+  if (ceilingLightCfg.enabled !== false) {
+    const ceilingLights = createCeilingLights({
+      zoneDefs,
+      zoneCenterX,
+      zoneCenterZ,
+      height,
+      wallThickness,
+      entranceHeight,
+      config: ceilingLightCfg,
+    });
+    group.add(ceilingLights);
+  }
+
   zoneDefs.forEach((d) => {
     const zone = MUSEUM_ZONES.find((z) => z.quadrant === d.q);
     if (!zone) return;
@@ -274,10 +287,6 @@ function createMuseumVisual() {
     const zoneGroup = createZoneDisplay(zone, zonePanelW, zonePanelH, zonePanelD);
     zoneGroup.position.set(cx, 0, cz);
     group.add(zoneGroup);
-
-    const pl = zoneLight.clone();
-    pl.position.set(cx, 3.2, cz);
-    group.add(pl);
   });
 
   const hallFill = new THREE.HemisphereLight(0xfff7eb, 0x5b5f69, VISUAL.museumInterior.baseFillIntensity);
@@ -285,6 +294,73 @@ function createMuseumVisual() {
   group.add(hallFill);
 
   return { group, collidables, doors };
+}
+
+function createCeilingLights({ zoneDefs, zoneCenterX, zoneCenterZ, height, wallThickness, entranceHeight, config }) {
+  const group = new THREE.Group();
+  const lightsPerZone = Math.max(1, Math.round(config.lightsPerZone ?? 2));
+  const ceilingY = Math.max(entranceHeight + 0.8, height - (config.heightOffset ?? 0.9));
+  const zoneInsetX = config.zoneInsetX ?? 1.3;
+  const zoneInsetZ = config.zoneInsetZ ?? 3.4;
+  const fixtureSize = config.fixtureSize ?? {};
+  const fixtureWidth = fixtureSize.width ?? 1.2;
+  const fixtureHeight = fixtureSize.height ?? 0.16;
+  const fixtureDepth = fixtureSize.depth ?? 0.5;
+  const stemHeight = 0.28;
+  const drop = config.drop ?? 0.35;
+
+  const fixtureMat = new THREE.MeshStandardMaterial({
+    color: config.fixtureColor ?? 0xe9dec8,
+    emissive: config.glowEmissive ?? 0xffc977,
+    emissiveIntensity: 0.35,
+    roughness: 0.72,
+    metalness: 0.03,
+  });
+  const stemMat = new THREE.MeshStandardMaterial({
+    color: 0xc8ba9e,
+    roughness: 0.78,
+    metalness: 0.04,
+  });
+
+  zoneDefs.forEach((zoneDef) => {
+    const cx = zoneDef.x * Math.max(0, zoneCenterX - zoneInsetX);
+    const cz = zoneDef.z * zoneCenterZ;
+    const zPositions = lightsPerZone === 1
+      ? [cz]
+      : [cz - zoneInsetZ / 2, cz + zoneInsetZ / 2];
+
+    zPositions.forEach((z) => {
+      const fixture = new THREE.Group();
+
+      const stem = new THREE.Mesh(
+        getBoxGeometry(0.14, stemHeight, 0.14),
+        stemMat
+      );
+      stem.position.set(cx, ceilingY + fixtureHeight / 2 + stemHeight / 2 - wallThickness * 0.2, z);
+      stem.castShadow = stem.receiveShadow = true;
+      fixture.add(stem);
+
+      const panel = new THREE.Mesh(
+        getBoxGeometry(fixtureWidth, fixtureHeight, fixtureDepth),
+        fixtureMat
+      );
+      panel.position.set(cx, ceilingY, z);
+      panel.castShadow = panel.receiveShadow = true;
+      fixture.add(panel);
+
+      const light = new THREE.PointLight(
+        config.color ?? 0xffe2b5,
+        config.intensity ?? 0.32,
+        config.range ?? 10
+      );
+      light.position.set(cx, ceilingY - drop, z);
+      fixture.add(light);
+
+      group.add(fixture);
+    });
+  });
+
+  return group;
 }
 
 function getMuseumPlacement(roadWidth) {
