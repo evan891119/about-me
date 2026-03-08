@@ -17,13 +17,14 @@ export function addGroundAndRoad(world, {
 
 export function addColliderForBoxMesh(world, mesh) {
   if (!mesh) return null;
+  const gp = mesh.geometry?.parameters;
+  if (!(gp && gp.width !== undefined && gp.height !== undefined && gp.depth !== undefined)) return null;
+
   mesh.updateWorldMatrix(true, true);
-  const bbox = new THREE.Box3().setFromObject(mesh);
-  const center = bbox.getCenter(new THREE.Vector3());
-  const half = bbox.getSize(new THREE.Vector3()).multiplyScalar(0.5);
-  const q = new THREE.Quaternion(); mesh.getWorldQuaternion(q);
+  const center = mesh.getWorldPosition(new THREE.Vector3());
+  const q = mesh.getWorldQuaternion(new THREE.Quaternion());
   const col = world.createCollider(
-    RAPIER.ColliderDesc.cuboid(half.x, half.y, half.z)
+    RAPIER.ColliderDesc.cuboid(gp.width / 2, gp.height / 2, gp.depth / 2)
       .setTranslation(center.x, center.y, center.z)
       .setRotation({ x:q.x, y:q.y, z:q.z, w:q.w })
   );
