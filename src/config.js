@@ -108,10 +108,32 @@ export const VISUAL = {
   materials: {
     ground: { color: 0x8f8d66, roughness: 0.92, metalness: 0.02 },
     road: { color: 0x646056, roughness: 0.9, metalness: 0.03 },
+    museumFloor: {
+      color: 0xd8d2c7,
+      groutColor: 0xb2aa9c,
+      roughness: 0.88,
+      metalness: 0.02,
+    },
     wallRoughness: 0.85,
     wallMetalness: 0.02,
     roofRoughness: 0.8,
     roofMetalness: 0.03,
     doorColor: 0x7f5430,
+    doorFrame: {
+      color: 0x5e6873,
+      roughness: 0.42,
+      metalness: 0.34,
+    },
+    doorGlass: {
+      color: 0xd9eef7,
+      roughness: 0.08,
+      metalness: 0.04,
+      opacity: 0.28,
+    },
+    doorHandle: {
+      color: 0xc6b38d,
+      roughness: 0.35,
+      metalness: 0.7,
+    },
   },
 };

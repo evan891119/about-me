@@ -163,6 +163,7 @@ function createMuseumVisual() {
     transparent: true,
     opacity: 0.35,
   });
+  const museumFloorCfg = VISUAL.materials.museumFloor ?? {};
   const ceilingLightCfg = VISUAL.museumInterior.ceilingLights ?? {};
 
   const roof = new THREE.Mesh(getBoxGeometry(width, wallThickness, depth), trimMat);
@@ -216,17 +217,59 @@ function createMuseumVisual() {
   glassPaneRight.position.set(entranceWidth / 2 + frontPanelW / 2, height * 0.52, depth / 2 - wallThickness * 0.7);
   group.add(glassPaneRight);
 
-  const entranceDoor = createDoorAssembly({
-    width: entranceWidth,
+  const interiorFloor = createMuseumFloor({
+    width,
+    depth,
+    wallThickness,
+    entranceWidth,
+    materialConfig: museumFloorCfg,
+  });
+  group.add(interiorFloor);
+
+  const doorGap = 0.18;
+  const doorLeafWidth = (entranceWidth - doorGap) / 2;
+  const leftDoor = createDoorAssembly({
+    width: doorLeafWidth,
     height: entranceHeight,
     thickness: wallThickness * 0.8,
-    color: 0x88a7b2,
+    side: 'left',
   });
-  entranceDoor.pivot.position.set(-entranceWidth / 2, 0, depth / 2 - wallThickness);
-  entranceDoor.pivot.userData.openRotation = -Math.PI / 2.2;
-  group.add(entranceDoor.pivot);
-  collidables.push(entranceDoor.mesh);
-  doors.push(entranceDoor);
+  leftDoor.pivot.position.set(-entranceWidth / 2, 0, depth / 2 - wallThickness);
+  group.add(leftDoor.pivot);
+  collidables.push(leftDoor.mesh);
+  doors.push(leftDoor);
+
+  const rightDoor = createDoorAssembly({
+    width: doorLeafWidth,
+    height: entranceHeight,
+    thickness: wallThickness * 0.8,
+    side: 'right',
+  });
+  rightDoor.pivot.position.set(doorGap / 2, 0, depth / 2 - wallThickness);
+  group.add(rightDoor.pivot);
+  collidables.push(rightDoor.mesh);
+  doors.push(rightDoor);
+
+  const frameDepth = wallThickness * 0.52;
+  const frameInsetZ = depth / 2 - wallThickness * 0.9;
+  const frameWidth = 0.16;
+  const frameMat = new THREE.MeshStandardMaterial({
+    color: VISUAL.materials.doorFrame?.color ?? 0x5e6873,
+    roughness: VISUAL.materials.doorFrame?.roughness ?? 0.42,
+    metalness: VISUAL.materials.doorFrame?.metalness ?? 0.34,
+  });
+  const leftJamb = new THREE.Mesh(getBoxGeometry(frameWidth, entranceHeight, frameDepth), frameMat);
+  leftJamb.position.set(-entranceWidth / 2 + frameWidth / 2, entranceHeight / 2, frameInsetZ);
+  leftJamb.castShadow = leftJamb.receiveShadow = true;
+  group.add(leftJamb);
+  const rightJamb = new THREE.Mesh(getBoxGeometry(frameWidth, entranceHeight, frameDepth), frameMat);
+  rightJamb.position.set(entranceWidth / 2 - frameWidth / 2, entranceHeight / 2, frameInsetZ);
+  rightJamb.castShadow = rightJamb.receiveShadow = true;
+  group.add(rightJamb);
+  const transom = new THREE.Mesh(getBoxGeometry(entranceWidth - frameWidth * 2, frameWidth, frameDepth), frameMat);
+  transom.position.set(0, entranceHeight - frameWidth / 2, frameInsetZ);
+  transom.castShadow = transom.receiveShadow = true;
+  group.add(transom);
 
   const verticalPart = (depth - corridorWidth) / 2;
   const dividerVTop = new THREE.Mesh(getBoxGeometry(wallThickness, height * 0.72, verticalPart), trimMat);
@@ -505,21 +548,135 @@ function wrapText(ctx, text, maxW, fontPx) {
   return lines;
 }
 
-function createDoorAssembly({ width, height, thickness, color = 0x7f5430 }) {
+function createMuseumFloor({ width, depth, wallThickness, entranceWidth, materialConfig = {} }) {
+  const group = new THREE.Group();
+  const floorHeight = 0.04;
+  const inset = wallThickness + 0.45;
+  const floorWidth = width - inset * 2;
+  const floorDepth = depth - inset * 2;
+  const slabMat = new THREE.MeshStandardMaterial({
+    color: materialConfig.color ?? 0xd8d2c7,
+    roughness: materialConfig.roughness ?? 0.88,
+    metalness: materialConfig.metalness ?? 0.02,
+  });
+  const groutMat = new THREE.MeshStandardMaterial({
+    color: materialConfig.groutColor ?? 0xb2aa9c,
+    roughness: 0.92,
+    metalness: 0.01,
+  });
+
+  const slab = new THREE.Mesh(getBoxGeometry(floorWidth, floorHeight, floorDepth), slabMat);
+  slab.position.set(0, floorHeight / 2, -0.3);
+  slab.receiveShadow = true;
+  group.add(slab);
+
+  const tileCols = 4;
+  const tileRows = 6;
+  const groutThickness = 0.05;
+  for (let i = 1; i < tileCols; i++) {
+    const stripe = new THREE.Mesh(getBoxGeometry(groutThickness, floorHeight * 0.65, floorDepth), groutMat);
+    stripe.position.set(-floorWidth / 2 + (floorWidth / tileCols) * i, floorHeight + 0.002, -0.3);
+    stripe.receiveShadow = true;
+    group.add(stripe);
+  }
+  for (let i = 1; i < tileRows; i++) {
+    const stripe = new THREE.Mesh(getBoxGeometry(floorWidth, floorHeight * 0.65, groutThickness), groutMat);
+    stripe.position.set(0, floorHeight + 0.002, -floorDepth / 2 - 0.3 + (floorDepth / tileRows) * i);
+    stripe.receiveShadow = true;
+    group.add(stripe);
+  }
+
+  const threshold = new THREE.Mesh(getBoxGeometry(entranceWidth - 0.3, 0.025, 0.55), groutMat);
+  threshold.position.set(0, 0.013, depth / 2 - wallThickness - 0.45);
+  threshold.receiveShadow = true;
+  group.add(threshold);
+
+  return group;
+}
+
+function createDoorAssembly({ width, height, thickness, side = 'left' }) {
   const pivot = new THREE.Object3D();
+  const frameCfg = VISUAL.materials.doorFrame ?? {};
+  const glassCfg = VISUAL.materials.doorGlass ?? {};
+  const handleCfg = VISUAL.materials.doorHandle ?? {};
+  const frameWidth = Math.max(0.08, width * 0.12);
+  const railHeight = Math.max(0.14, height * 0.08);
+  const glassWidth = Math.max(0.18, width - frameWidth * 2);
+  const glassHeight = Math.max(0.3, height - railHeight * 2);
+  const handleOffsetX = side === 'left' ? width - frameWidth * 0.55 : frameWidth * 0.55;
+  const handleDepth = thickness * 0.85;
+
   const doorMesh = new THREE.Mesh(
     getBoxGeometry(width, height, thickness),
-    new THREE.MeshStandardMaterial({ color, roughness: 0.55, metalness: 0.04, transparent: true, opacity: 0.65 })
+    new THREE.MeshStandardMaterial({
+      color: glassCfg.color ?? 0xd9eef7,
+      roughness: glassCfg.roughness ?? 0.08,
+      metalness: glassCfg.metalness ?? 0.04,
+      transparent: true,
+      opacity: glassCfg.opacity ?? 0.28,
+    })
   );
   doorMesh.position.set(width / 2, height / 2, thickness / 2);
   doorMesh.castShadow = doorMesh.receiveShadow = true;
+  const frameMat = new THREE.MeshStandardMaterial({
+    color: frameCfg.color ?? 0x5e6873,
+    roughness: frameCfg.roughness ?? 0.42,
+    metalness: frameCfg.metalness ?? 0.34,
+  });
+  const handleMat = new THREE.MeshStandardMaterial({
+    color: handleCfg.color ?? 0xc6b38d,
+    roughness: handleCfg.roughness ?? 0.35,
+    metalness: handleCfg.metalness ?? 0.7,
+  });
+
+  const stiles = [
+    { x: frameWidth / 2 },
+    { x: width - frameWidth / 2 },
+  ];
+  stiles.forEach(({ x }) => {
+    const stile = new THREE.Mesh(getBoxGeometry(frameWidth, height, thickness * 1.04), frameMat);
+    stile.position.set(x, height / 2, thickness / 2);
+    stile.castShadow = stile.receiveShadow = true;
+    doorMesh.add(stile);
+  });
+
+  const rails = [
+    { y: railHeight / 2 },
+    { y: height - railHeight / 2 },
+  ];
+  rails.forEach(({ y }) => {
+    const rail = new THREE.Mesh(getBoxGeometry(width - frameWidth * 2, railHeight, thickness * 1.04), frameMat);
+    rail.position.set(width / 2, y, thickness / 2);
+    rail.castShadow = rail.receiveShadow = true;
+    doorMesh.add(rail);
+  });
+
+  const glassPanel = new THREE.Mesh(
+    getBoxGeometry(glassWidth, glassHeight, Math.max(0.02, thickness * 0.28)),
+    new THREE.MeshStandardMaterial({
+      color: glassCfg.color ?? 0xd9eef7,
+      roughness: glassCfg.roughness ?? 0.08,
+      metalness: glassCfg.metalness ?? 0.04,
+      transparent: true,
+      opacity: Math.min(0.5, (glassCfg.opacity ?? 0.28) + 0.08),
+    })
+  );
+  glassPanel.position.set(width / 2, height / 2, thickness / 2);
+  glassPanel.castShadow = glassPanel.receiveShadow = true;
+  doorMesh.add(glassPanel);
+
+  const handle = new THREE.Mesh(getBoxGeometry(0.08, height * 0.28, handleDepth), handleMat);
+  handle.position.set(handleOffsetX, height / 2, thickness / 2);
+  handle.castShadow = handle.receiveShadow = true;
+  doorMesh.add(handle);
+
   pivot.add(doorMesh);
 
   doorMesh.userData.isDoor = true;
   doorMesh.userData.doorPivot = pivot;
   pivot.userData.isOpen = false;
   pivot.userData.closedRotation = 0;
-  pivot.userData.openRotation = -Math.PI / 2;
+  pivot.userData.openRotation = side === 'right' ? Math.PI / 2.2 : -Math.PI / 2.2;
 
   return { mesh: doorMesh, pivot };
 }
