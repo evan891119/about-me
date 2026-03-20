@@ -10,7 +10,7 @@ export const MUSEUM_ZONES = [
     quadrant: 'nw',
     title: '序章館',
     sign: '歡迎來到我的 3D 博物館',
-    back: '我是張正誠，專注在互動式 3D 體驗與前端工程。',
+    back: '我是張正誠，專注在 AI 技術研究。',
     left: '建議動線：序章 -> 技能 -> 作品 -> 聯絡。',
     right: '目標：把技術做成有記憶點、可被感受到的體驗。',
   },
@@ -38,7 +38,7 @@ export const MUSEUM_ZONES = [
     title: '聯絡館',
     sign: "Let's Build Together",
     back: '歡迎合作：互動官網、3D 展示、品牌體驗空間。',
-    left: 'GitHub: github.com/yourname  Email: you@example.com',
+    left: 'GitHub: github.com/evan891119  Email: sneezycat@sneezycat.dev',
     right: '如果你有想法，我可以幫你把它做成可互動的作品。',
   },
 ];
