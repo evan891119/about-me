@@ -45,10 +45,11 @@ export const INTERACTION = {
 
 export const SKY = {
   updateIntervalSec: 0.5,
+  starCount: 3500,
 };
 
 export const VISUAL = {
-  pixelRatioMax: 1.5,
+  pixelRatioMax: 1.25,
   toneMappingExposure: 1.05,
   fog: {
     dayColor: 0xd8c7a8,
@@ -58,12 +59,12 @@ export const VISUAL = {
     far: 140,
   },
   shadows: {
-    mapSize: 1024,
+    mapSize: 512,
     bias: -0.00015,
   },
   postFX: {
     enabled: true,
-    quality: 'med',
+    quality: 'low',
     bloomStrength: 0.22,
     bloomRadius: 0.35,
     bloomThreshold: 0.78,
@@ -73,7 +74,11 @@ export const VISUAL = {
   },
   propsDensity: {
     enabled: true,
-    multiplier: 1.0,
+    multiplier: 0.75,
+  },
+  streetLights: {
+    spacing: 28,
+    lightRange: 16,
   },
   camera: {
     showcaseFov: 62,
@@ -92,10 +97,10 @@ export const VISUAL = {
     baseFillIntensity: 0.32,
     ceilingLights: {
       enabled: true,
-      lightsPerZone: 2,
+      lightsPerZone: 1,
       color: 0xffe2b5,
       intensity: 1,
-      range: 30,
+      range: 22,
       heightOffset: 0.9,
       zoneInsetX: 1.3,
       zoneInsetZ: 3.4,
@@ -136,4 +141,8 @@ export const VISUAL = {
       metalness: 0.7,
     },
   },
+};
+
+export const DEBUG = {
+  perfOverlay: true,
 };

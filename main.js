@@ -13,6 +13,7 @@ import { InteractionSystem } from './src/systems/InteractionSystem.js';
 import { FlashlightSystem } from './src/systems/FlashlightSystem.js';
 import { PostFXSystem } from './src/systems/PostFXSystem.js';
 import { ShowcaseCameraSystem } from './src/systems/ShowcaseCameraSystem.js';
+import { PerfDebugSystem } from './src/systems/PerfDebugSystem.js';
 import { PlayerController } from './src/player/PlayerController.js';
 import { buildWorld } from './src/world/WorldBuilder.js';
 import { HUD } from './src/ui/HUD.js';
@@ -51,6 +52,9 @@ async function init() {
   const postFX = new PostFXSystem(app.renderer, app.scene, app.camera);
   postFX.init();
   window.addEventListener('resize', () => postFX.onResize());
+
+  const perfDebug = new PerfDebugSystem(app.renderer);
+  perfDebug.init();
 
   // World（只產生 Mesh 與 metadata）
   const { collidableMeshes, doors, museumAnchor, streetLights } = await buildWorld(app.scene, {
@@ -99,6 +103,7 @@ async function init() {
   loop.addFrame({ update: () => interaction.update() });
   loop.addFrame({ update: (dt) => sky.update(dt) });
   loop.addFrame({ update: () => postFX.render() });
+  loop.addFrame({ update: (dt) => perfDebug.update(dt) });
 
   loop.tick();
 }

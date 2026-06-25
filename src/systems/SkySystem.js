@@ -58,7 +58,7 @@ export class SkySystem {
 
     // Stars
     {
-      const starCount = 10000;
+      const starCount = SKY.starCount ?? 10000;
       const pos = new Float32Array(starCount * 3);
       for (let i = 0; i < starCount; i++) {
         const theta = Math.random() * 2 * Math.PI;
