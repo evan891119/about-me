@@ -27,6 +27,7 @@ export const WORLD = {
     wallThickness: 0.28,
     entranceWidth: 4.8,
     entranceHeight: 3.4,
+    entranceQuadrant: 'sw',
     zonePadding: 2.2,
     corridorWidth: 5.4,
     placement: {
