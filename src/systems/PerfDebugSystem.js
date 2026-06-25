@@ -1,8 +1,9 @@
 import { DEBUG } from '../config.js';
 
 export class PerfDebugSystem {
-  constructor(renderer) {
+  constructor(renderer, camera) {
     this.renderer = renderer;
+    this.camera = camera;
     this.enabled = !!DEBUG.perfOverlay;
     this.el = null;
     this.frameCount = 0;
@@ -66,6 +67,7 @@ export class PerfDebugSystem {
     this.el.textContent = [
       `FPS ${this.fps}`,
       `DPR ${this.renderer.getPixelRatio().toFixed(2)}`,
+      `FOV ${this.camera?.fov ? Math.round(this.camera.fov) : '--'}`,
       `calls ${this.lastFrame.calls}`,
       `tris ${this.lastFrame.triangles}`,
       `tex ${this.lastFrame.textures}`,

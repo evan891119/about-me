@@ -81,6 +81,7 @@ export const VISUAL = {
     lightRange: 16,
   },
   camera: {
+    playerFov: 75,
     showcaseFov: 62,
     showcaseOffset: { x: -30, y: 15, z: 22 },
     showcaseLookAtOffset: { x: 8, y: 0, z: 0 },

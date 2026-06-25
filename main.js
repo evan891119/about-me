@@ -53,7 +53,7 @@ async function init() {
   postFX.init();
   window.addEventListener('resize', () => postFX.onResize());
 
-  const perfDebug = new PerfDebugSystem(app.renderer);
+  const perfDebug = new PerfDebugSystem(app.renderer, app.camera);
   perfDebug.init();
 
   // World（只產生 Mesh 與 metadata）

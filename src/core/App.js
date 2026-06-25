@@ -13,7 +13,7 @@ export class App {
     this.scene.background = null;
 
     this.camera = new THREE.PerspectiveCamera(
-      75, window.innerWidth / window.innerHeight, 0.1, 1000
+      VISUAL.camera.playerFov ?? 70, window.innerWidth / window.innerHeight, 0.1, 1000
     );
     this.camera.position.set(0, 1.6, 5);
 
